@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-surface-muted text-ink antialiased;
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 300;
+}
+
+.font-medium {
+  font-weight: 400 !important;
+}
+
+.font-semibold {
+  font-weight: 500 !important;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-weight: 800;
+  color: #c2a24c;
+}
+
+button,
+a[class*="bg-brand"] {
+  /* Marcellus n'existe qu'en graisse 400 : l'espacement fait l'élégance. */
+  font-family: var(--font-marcellus), Georgia, serif;
+  font-weight: 400 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  /* Taille unique des textes de boutons : 10px (prioritaire sur text-*). */
+  font-size: 10px !important;
+}
+
+/* Scroll possible, barre invisible (souris / tactile). */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

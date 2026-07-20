@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Beer,
+  Check,
   Coffee,
   CookingPot,
   CupSoda,
@@ -20,7 +21,7 @@ import {
 import { formatFCFA } from "@/lib/data";
 import { cartTotal, useCart } from "@/lib/store";
 import type { Product } from "@/lib/types";
-import { FIXED_CATEGORIES } from "@/lib/categories";
+import { FIXED_CATEGORIES, categoryLabel } from "@/lib/categories";
 import {
   fetchProducts,
   removeRealtimeChannel,
@@ -49,10 +50,11 @@ export default function CaissePage() {
   const [query, setQuery] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { lines, channel, restaurantTableId, add } = useCart();
+  const { lines, channel, payment, restaurantTableId, amountReceived, add } =
+    useCart();
   const total = cartTotal(lines);
   const count = lines.reduce((n, l) => n + l.qty, 0);
-  useCustomerDisplayBroadcaster(lines, channel);
+  useCustomerDisplayBroadcaster(lines, channel, payment, amountReceived);
 
   useEffect(() => {
     if (restaurantTableId) setDrawerOpen(true);
@@ -76,14 +78,6 @@ export default function CaissePage() {
     };
   }, [loadProducts]);
 
-  const countBySlug = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const product of products) {
-      map.set(product.category, (map.get(product.category) ?? 0) + 1);
-    }
-    return map;
-  }, [products]);
-
   const filtered = useMemo(
     () =>
       products.filter(
@@ -94,11 +88,55 @@ export default function CaissePage() {
     [category, products, query]
   );
 
+  const selectedIds = useMemo(
+    () => new Set(lines.map((line) => line.product.id)),
+    [lines]
+  );
+
+  const activeCategoryLabel =
+    category === "all" ? "Tout le menu" : categoryLabel(category);
+
   return (
-    <div className="flex h-full bg-surface-muted">
+    <div className="flex h-full bg-transparent">
+      {/* Barre catégories — style tablette comme l'image */}
+      <aside className="flex w-[5.5rem] shrink-0 flex-col overflow-hidden rounded-r-[1.6rem] diego-gradient text-white shadow-panel sm:w-24">
+        <div className="flex-1 space-y-1.5 overflow-y-auto px-1.5 py-3 sm:px-2">
+          {[
+            { id: "all", slug: "all", label: "Tout" },
+            ...FIXED_CATEGORIES,
+          ].map((c) => {
+            const active = category === c.slug;
+            const Icon = CATEGORY_ICONS[c.slug] ?? LayoutGrid;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCategory(c.slug)}
+                className={`flex w-full flex-col items-center gap-1 rounded-2xl px-1 py-2.5 transition-all ${
+                  active
+                    ? "bg-white/25 text-white shadow-card ring-1 ring-white/40"
+                    : "text-white/80 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <Icon size={17} strokeWidth={active ? 2.4 : 2} />
+                <span className="w-full whitespace-normal break-words text-center font-sans text-[9px] font-semibold normal-case leading-[1.15] tracking-normal">
+                  {c.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
       <section className="flex min-w-0 flex-1 flex-col">
-        <header className="px-3 pt-3 sm:px-4">
-          <div className="relative">
+        <header className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-xl font-bold text-ink sm:text-2xl">
+              {activeCategoryLabel}
+            </h1>
+            <p className="text-2xs text-ink-faint">Chez Diego · Caisse tablette</p>
+          </div>
+          <div className="relative min-w-[12rem] flex-1 sm:max-w-md">
             <Search
               size={15}
               className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-faint"
@@ -107,91 +145,60 @@ export default function CaissePage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Rechercher un produit…"
-              className="w-full rounded-full border border-line bg-surface py-2.5 pl-10 pr-4 text-xs shadow-card outline-none focus:border-brand-400"
+              className="w-full rounded-full border border-line bg-white py-2.5 pl-10 pr-4 text-xs shadow-card outline-none focus:border-brand-400"
             />
-          </div>
-
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-            {[
-              { id: "all", slug: "all", label: "Tout", sortOrder: -1 },
-              ...FIXED_CATEGORIES,
-            ].map((c) => {
-              const active = category === c.slug;
-              const Icon = CATEGORY_ICONS[c.slug] ?? LayoutGrid;
-              const items =
-                c.slug === "all"
-                  ? products.length
-                  : countBySlug.get(c.slug) ?? 0;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setCategory(c.slug)}
-                  className={`flex w-24 shrink-0 flex-col items-start gap-1.5 rounded-card border p-2.5 text-left transition-colors ${
-                    active
-                      ? "border-brand-500 bg-brand-50"
-                      : "border-line bg-surface hover:border-brand-300"
-                  }`}
-                >
-                  <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-full ${
-                      active
-                        ? "bg-brand-500 text-ink"
-                        : "bg-surface-soft text-ink-soft"
-                    }`}
-                  >
-                    <Icon size={13} />
-                  </span>
-                  <span className="w-full font-sans normal-case tracking-normal">
-                    <span className="block truncate text-2xs font-semibold">
-                      {c.label}
-                    </span>
-                    <span className="block text-2xs text-ink-faint">
-                      {items} produit{items > 1 ? "s" : ""}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
           </div>
         </header>
 
         {error && (
-          <p className="mx-3 mt-2 rounded-card border border-amber-200 bg-amber-50 px-3 py-2 text-2xs text-amber-800 sm:mx-4">
+          <p className="mx-4 mb-2 rounded-card border border-amber-200 bg-amber-50 px-3 py-2 text-2xs text-amber-800">
             {error}
           </p>
         )}
 
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4">
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8">
-            {filtered.map((p) => (
-              <button
-                key={p.id}
-                disabled={!p.inStock}
-                onClick={() => add(p)}
-                className={`relative flex flex-col rounded-card border border-line bg-surface p-1.5 text-left shadow-card transition-all ${
-                  p.inStock
-                    ? "hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-panel active:translate-y-0"
-                    : "opacity-45"
-                }`}
-              >
-                <FoodImage
-                  src={p.imageUrl}
-                  alt={p.name}
-                  className="aspect-square w-full rounded-card object-cover"
-                />
-                <span className="mt-1.5 line-clamp-2 min-h-[2.25rem] font-script text-base normal-case leading-[1.125rem] tracking-normal">
-                  {p.name}
-                </span>
-                <span className="mt-0.5 font-sans text-2xs font-bold normal-case tracking-normal text-brand-600 tabular-nums">
-                  {formatFCFA(p.price)}
-                </span>
-                {!p.inStock && (
-                  <span className="absolute right-1.5 top-1.5 rounded-full bg-red-100 px-1.5 py-0.5 font-sans text-2xs font-semibold normal-case tracking-normal text-red-600">
-                    Rupture
-                  </span>
-                )}
-              </button>
-            ))}
+        <div className="flex-1 overflow-y-auto px-3 pb-4 sm:px-4">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-3">
+            {filtered.map((p) => {
+              const selected = selectedIds.has(p.id);
+              return (
+                <button
+                  key={p.id}
+                  disabled={!p.inStock}
+                  onClick={() => add(p)}
+                  className={`group relative overflow-hidden rounded-2xl bg-white text-left shadow-card transition-all ${
+                    selected
+                      ? "ring-2 ring-brand-500 shadow-panel"
+                      : "hover:-translate-y-0.5 hover:shadow-panel"
+                  } ${!p.inStock ? "opacity-45" : ""}`}
+                >
+                  <div className="relative aspect-square overflow-hidden">
+                    <FoodImage
+                      src={p.imageUrl}
+                      alt={p.name}
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                    />
+                    <span className="absolute left-1.5 top-1.5 rounded-full px-2 py-0.5 font-sans text-[9px] font-bold normal-case tracking-normal text-white shadow-card diego-gradient tabular-nums">
+                      {formatFCFA(p.price)}
+                    </span>
+                    {!p.inStock && (
+                      <span className="absolute right-1.5 top-1.5 rounded-full bg-red-100 px-1.5 py-0.5 font-sans text-[9px] font-semibold normal-case tracking-normal text-red-600">
+                        Rupture
+                      </span>
+                    )}
+                    <div className="absolute inset-x-1.5 bottom-1.5 flex items-end gap-1 rounded-xl bg-white/95 px-2 py-1.5 shadow-card">
+                      <span className="line-clamp-2 min-w-0 flex-1 font-script text-sm normal-case leading-4 tracking-normal text-ink">
+                        {p.name}
+                      </span>
+                      {selected && (
+                        <span className="mb-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full diego-gradient text-white">
+                          <Check size={10} strokeWidth={3} />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
           {filtered.length === 0 && (
             <p className="mt-10 text-center text-xs text-ink-faint">
@@ -201,16 +208,14 @@ export default function CaissePage() {
         </div>
       </section>
 
-      <aside className="hidden w-80 shrink-0 p-3 pl-0 lg:block xl:w-[22rem]">
-        <div className="h-full overflow-hidden rounded-card border border-line bg-surface shadow-card">
-          <TicketPanel />
-        </div>
+      <aside className="hidden w-[17rem] shrink-0 border-l border-line bg-surface md:block lg:w-[18.5rem] xl:w-[20rem]">
+        <TicketPanel />
       </aside>
 
       {!drawerOpen && count > 0 && (
         <button
           onClick={() => setDrawerOpen(true)}
-          className="fixed bottom-16 right-4 z-40 flex items-center gap-2 rounded-full bg-brand-500 px-5 py-3 text-ink shadow-panel lg:hidden"
+          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full diego-gradient px-5 py-3 text-white shadow-panel md:hidden"
         >
           <ShoppingBasket size={15} />
           {count} · {formatFCFA(total)}
@@ -218,15 +223,15 @@ export default function CaissePage() {
       )}
 
       {drawerOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 md:hidden">
           <div
             className="absolute inset-0 bg-ink/40"
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="absolute inset-y-0 right-0 flex w-[85%] max-w-sm flex-col bg-surface shadow-panel">
+          <div className="absolute inset-y-0 right-0 flex w-[88%] max-w-sm flex-col overflow-hidden bg-surface shadow-panel">
             <button
               onClick={() => setDrawerOpen(false)}
-              className="absolute right-2 top-2 z-10 rounded-full p-1.5 text-ink-soft hover:bg-surface-soft"
+              className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1.5 text-ink-soft hover:bg-white"
               aria-label="Fermer"
             >
               <X size={16} />

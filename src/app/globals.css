@@ -4,20 +4,54 @@
 
 :root {
   color-scheme: light;
+  --diego-gradient: linear-gradient(160deg, #d4b65c 0%, #c2a24c 45%, #8f7130 100%);
+  --diego-gradient-soft: linear-gradient(160deg, #e7d8a8 0%, #c2a24c 55%, #a5883b 100%);
 }
 
 body {
-  @apply bg-surface-muted text-ink antialiased;
+  @apply text-ink antialiased;
+  background-color: #f3ead0;
+  background-image:
+    radial-gradient(ellipse 120% 80% at 0% -10%, #faf5e6 0%, transparent 50%),
+    radial-gradient(ellipse 90% 70% at 100% 110%, #e7d8a8 0%, transparent 55%),
+    linear-gradient(165deg, #faf5e6 0%, #f3ead0 40%, #ebe0c0 100%);
   font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
   font-weight: 300;
 }
 
 .font-medium {
-  font-weight: 400 !important;
+  font-weight: 500 !important;
 }
 
 .font-semibold {
-  font-weight: 500 !important;
+  font-weight: 600 !important;
+}
+
+.font-bold {
+  font-weight: 700 !important;
+}
+
+/* Cuisine + Commandes : textes lisibles (hors style boutons global 10px). */
+.ops-readable {
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400;
+  color: #1a1a1a;
+}
+
+.ops-readable h1,
+.ops-readable h2,
+.ops-readable h3 {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.ops-readable button {
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0.01em !important;
 }
 
 h1,
@@ -40,6 +74,21 @@ a[class*="bg-brand"] {
   letter-spacing: 0.1em;
   /* Taille unique des textes de boutons : 10px (prioritaire sur text-*). */
   font-size: 10px !important;
+}
+
+.diego-gradient {
+  background-image: var(--diego-gradient);
+}
+
+.diego-gradient-soft {
+  background-image: var(--diego-gradient-soft);
+}
+
+/* Fira Sans Condensed for monetary amounts (affichage + caisse). */
+.font-amount {
+  font-family: var(--font-fira), "Fira Sans Condensed", ui-sans-serif, sans-serif !important;
+  font-style: normal;
+  letter-spacing: -0.02em;
 }
 
 /* Scroll possible, barre invisible (souris / tactile). */

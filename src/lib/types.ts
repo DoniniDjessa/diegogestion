@@ -22,6 +22,7 @@ export interface Product {
 export type OrderChannel = "comptoir" | "table" | "emporter" | "livraison";
 
 export type OrderStatus =
+  | "a_valider"
   | "en_attente"
   | "preparation"
   | "pret"

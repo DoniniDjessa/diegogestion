@@ -1,7 +1,1 @@
-{
-  "/affichage/page": "app/affichage/page.js",
-  "/cuisine/page": "app/cuisine/page.js",
-  "/salle/page": "app/salle/page.js",
-  "/parametres/menu/page": "app/parametres/menu/page.js",
-  "/commandes/page": "app/commandes/page.js"
-}
+{}

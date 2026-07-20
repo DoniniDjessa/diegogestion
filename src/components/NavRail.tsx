@@ -84,7 +84,6 @@ export function NavRail() {
     };
   }, []);
 
-  // Customer-facing display and login stay full-screen.
   if (pathname === "/affichage" || pathname === "/connexion") return null;
 
   const visibleItems = ITEMS.filter(
@@ -100,77 +99,45 @@ export function NavRail() {
   }
 
   return (
-    <>
-      {/* Sidebar — écrans larges (≥ 1250px) */}
-      <nav className="hidden min-[1250px]:flex w-44 shrink-0 flex-col gap-1.5 border-r border-line bg-surface px-3 py-4">
-        <div className="mb-4 flex items-center gap-2.5 px-1.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-brand-500 bg-brand-50">
-            <UtensilsCrossed size={17} className="text-brand-600" />
-          </div>
-          <div className="leading-tight">
-            <p className="font-display text-sm font-bold text-brand-600">
-              DIEGO
-            </p>
-            <p className="text-2xs text-ink-faint">Gestion</p>
-          </div>
-        </div>
+    <nav className="flex w-[4.75rem] shrink-0 flex-col items-center gap-2 border-r border-line bg-surface px-2 py-4 sm:w-20">
+      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl diego-gradient text-white shadow-card">
+        <UtensilsCrossed size={18} />
+      </div>
+
+      <div className="flex w-full flex-1 flex-col items-center gap-1.5 overflow-y-auto">
         {visibleItems.map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           return (
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-2.5 rounded-full px-4 py-2.5 transition-colors ${
+              className={`flex w-full flex-col items-center gap-1 rounded-2xl px-1 py-2.5 transition-all ${
                 active
-                  ? "bg-brand-500 text-ink shadow-card"
+                  ? "diego-gradient text-white shadow-panel"
                   : "text-ink-soft hover:bg-surface-soft hover:text-ink"
               }`}
             >
-              <Icon size={16} strokeWidth={active ? 2.4 : 2} />
-              {label}
-            </Link>
-          );
-        })}
-        {role !== null && (
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="mt-auto flex items-center gap-2.5 rounded-full px-4 py-2.5 text-ink-soft transition-colors hover:bg-red-50 hover:text-red-600"
-          >
-            <LogOut size={16} />
-            Déconnexion
-          </button>
-        )}
-      </nav>
-
-      {/* Barre horizontale — jusqu'à 1250px */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-line bg-surface py-1.5 min-[1250px]:hidden">
-        {visibleItems.map(({ href, label, icon: Icon }) => {
-          const active = isActive(pathname, href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`flex flex-col items-center gap-0.5 rounded-card px-2 py-1 ${
-                active ? "text-brand-600" : "text-ink-soft"
-              }`}
-            >
               <Icon size={18} strokeWidth={active ? 2.4 : 2} />
-              {label}
+              <span className="max-w-full whitespace-normal break-words text-center font-sans text-[9px] font-semibold normal-case leading-tight tracking-normal">
+                {label}
+              </span>
             </Link>
           );
         })}
-        {role !== null && (
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="flex flex-col items-center gap-0.5 rounded-card px-2 py-1 text-ink-soft hover:text-red-600"
-          >
-            <LogOut size={18} />
+      </div>
+
+      {role !== null && (
+        <button
+          type="button"
+          onClick={() => void logout()}
+          className="mt-2 flex w-full flex-col items-center gap-1 rounded-2xl px-1 py-2.5 text-ink-soft transition-colors hover:bg-red-50 hover:text-red-600"
+        >
+          <LogOut size={17} />
+          <span className="text-center font-sans text-[9px] font-semibold normal-case leading-tight tracking-normal">
             Sortir
-          </button>
-        )}
-      </nav>
-    </>
+          </span>
+        </button>
+      )}
+    </nav>
   );
 }

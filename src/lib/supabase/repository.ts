@@ -571,6 +571,36 @@ export async function setOrderPaymentStatus(
   if (!data) throw new Error("Payment update was not authorized.");
 }
 
+/** Remplace les lignes d'une commande web encore à valider. */
+export async function replacePendingOrderItems(
+  orderId: string,
+  items: { productId: string; quantity: number; note?: string }[],
+  note?: string
+): Promise<void> {
+  const { error } = await requireSupabase().rpc(
+    "diego_replace_pending_order_items",
+    {
+      p_order_id: orderId,
+      p_note: note ?? null,
+      p_items: items.map((item) => ({
+        product_id: item.productId,
+        quantity: item.quantity,
+        note: item.note ?? null,
+      })),
+    }
+  );
+  if (error) throw error;
+}
+
+/** Valide une commande web → envoie en cuisine (en_attente). */
+export async function validateCustomerOrder(orderId: string): Promise<void> {
+  const { error } = await requireSupabase().rpc(
+    "diego_validate_customer_order",
+    { p_order_id: orderId }
+  );
+  if (error) throw error;
+}
+
 /** Assigne (ou retire) une table à une commande existante. */
 export async function assignOrderTable(
   orderId: string,

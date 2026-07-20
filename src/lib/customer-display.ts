@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import type { CartLine } from "@/lib/store";
-import type { OrderChannel } from "@/lib/types";
+import type { OrderChannel, PaymentMethod } from "@/lib/types";
 
 const CHANNEL_NAME = "diego-customer-display";
 const CART_EVENT = "cart-updated";
@@ -13,12 +13,16 @@ const REQUEST_EVENT = "request-cart";
 export type CustomerDisplaySnapshot = {
   lines: CartLine[];
   channel: OrderChannel;
+  payment: PaymentMethod;
+  amountReceived: number;
   updatedAt: string;
 };
 
 const EMPTY_SNAPSHOT: CustomerDisplaySnapshot = {
   lines: [],
   channel: "table",
+  payment: "especes",
+  amountReceived: 0,
   updatedAt: new Date(0).toISOString(),
 };
 
@@ -36,7 +40,9 @@ function sendRealtime(
 
 export function useCustomerDisplayBroadcaster(
   lines: CartLine[],
-  channelType: OrderChannel
+  channelType: OrderChannel,
+  payment: PaymentMethod,
+  amountReceived: number
 ) {
   const realtimeRef = useRef<RealtimeChannel | null>(null);
   const browserRef = useRef<BroadcastChannel | null>(null);
@@ -82,12 +88,14 @@ export function useCustomerDisplayBroadcaster(
     const snapshot: CustomerDisplaySnapshot = {
       lines,
       channel: channelType,
+      payment,
+      amountReceived,
       updatedAt: new Date().toISOString(),
     };
     snapshotRef.current = snapshot;
     sendRealtime(realtimeRef.current, snapshot);
     browserRef.current?.postMessage({ event: CART_EVENT, payload: snapshot });
-  }, [channelType, lines]);
+  }, [amountReceived, channelType, lines, payment]);
 }
 
 export function useCustomerDisplayReceiver() {
@@ -99,7 +107,12 @@ export function useCustomerDisplayReceiver() {
     const acceptSnapshot = (payload: unknown) => {
       const next = payload as CustomerDisplaySnapshot;
       if (!next || !Array.isArray(next.lines)) return;
-      setSnapshot(next);
+      setSnapshot({
+        ...EMPTY_SNAPSHOT,
+        ...next,
+        amountReceived: Number(next.amountReceived) || 0,
+        payment: next.payment ?? "especes",
+      });
     };
 
     const supabase = getSupabase();

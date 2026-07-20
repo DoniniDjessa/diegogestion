@@ -23,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-dvh overflow-hidden">
       <NavRail />
-      <main className="min-w-0 flex-1 overflow-hidden pb-14 min-[1250px]:pb-0">
+      <main className="min-w-0 flex-1 overflow-hidden">
         <AuthGate>{children}</AuthGate>
       </main>
     </div>

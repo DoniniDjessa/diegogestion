@@ -9,6 +9,13 @@ const config: Config = {
         display: ["var(--font-playfair)", "Georgia", "serif"],
         button: ["var(--font-marcellus)", "Georgia", "serif"],
         script: ["var(--font-greatvibes)", "cursive"],
+        amount: [
+          "var(--font-fira)",
+          '"Fira Sans Condensed"',
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+        ],
       },
       colors: {
         brand: {
@@ -23,8 +30,8 @@ const config: Config = {
         },
         surface: {
           DEFAULT: "#fffdf6",
-          muted: "#fbf6ea",
-          soft: "#f3ecd9",
+          muted: "#f3ead0",
+          soft: "#ebe0c0",
         },
         ink: {
           DEFAULT: "#1a1a1a",

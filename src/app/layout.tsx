@@ -1,12 +1,24 @@
 import type { Metadata } from "next";
-import { Great_Vibes, Manrope, Marcellus, Playfair_Display } from "next/font/google";
+import {
+  Fira_Sans_Condensed,
+  Great_Vibes,
+  Manrope,
+  Marcellus,
+  Playfair_Display,
+} from "next/font/google";
 import "./globals.css";
 import { AppShell } from "./AppShell";
 
 const manrope = Manrope({
   subsets: ["latin"],
-  weight: ["300", "400", "500"],
+  weight: ["300", "400", "500", "600", "700"],
   variable: "--font-manrope",
+});
+const firaSans = Fira_Sans_Condensed({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-fira",
+  display: "swap",
 });
 const greatVibes = Great_Vibes({
   subsets: ["latin"],
@@ -33,10 +45,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="fr">
-      <body
-        className={`${manrope.className} ${manrope.variable} ${marcellus.variable} ${playfair.variable} ${greatVibes.variable}`}
-      >
+    <html
+      lang="fr"
+      className={`${manrope.variable} ${firaSans.variable} ${marcellus.variable} ${playfair.variable} ${greatVibes.variable}`}
+    >
+      <body className={manrope.className}>
         <AppShell>{children}</AppShell>
       </body>
     </html>

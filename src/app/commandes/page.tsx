@@ -8,25 +8,33 @@ import {
   ChevronRight,
   CheckCircle2,
   ClipboardList,
+  Clock3,
+  Minus,
+  Plus,
   Printer,
   RefreshCw,
   RotateCcw,
   Search,
+  Send,
+  Trash2,
   Truck,
 } from "lucide-react";
 import { BrandLoader } from "@/components/BrandLoader";
 import { CHANNEL_META, formatFCFA } from "@/lib/data";
-import type { Order, OrderStatus, RestaurantTable } from "@/lib/types";
+import type { Order, OrderStatus, Product, RestaurantTable } from "@/lib/types";
 import {
   assignOrderTable,
   cancelOrder as cancelOrderRemote,
   fetchAllOrders,
+  fetchProducts,
   fetchRestaurantTables,
   removeRealtimeChannel,
+  replacePendingOrderItems,
   setOrderPaymentStatus,
   setOrderStatus,
   setRestaurantTableStatus,
   subscribeToRestaurantChanges,
+  validateCustomerOrder,
 } from "@/lib/supabase/repository";
 import { printOrderReceipt } from "@/lib/receipt";
 import { orderCode } from "@/lib/order-code";
@@ -37,8 +45,12 @@ const STATUS_META: Record<
   OrderStatus,
   { label: string; className: string }
 > = {
+  a_valider: {
+    label: "À valider",
+    className: "border-orange-200 bg-orange-50 text-orange-700",
+  },
   en_attente: {
-    label: "En attente",
+    label: "Cuisine",
     className: "border-amber-200 bg-amber-50 text-amber-700",
   },
   preparation: {
@@ -68,8 +80,16 @@ const STATUS_META: Record<
 };
 
 type Filter = "toutes" | "actives" | "payees" | "annulees";
-type OrderScope = "commandes" | "en_ligne" | "a_livrer" | "historique";
+type OrderScope = "a_valider" | "commandes" | "en_ligne" | "a_livrer" | "historique";
 type DateFilter = "today" | "week" | "month" | "range";
+
+type DraftLine = {
+  productId: string;
+  name: string;
+  price: number;
+  qty: number;
+  note?: string;
+};
 
 const HISTORY_PAGE_SIZE = 10;
 
@@ -132,7 +152,8 @@ function isRecentOrder(order: Order, nowMs: number): boolean {
 export default function CommandesPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
-  const [scope, setScope] = useState<OrderScope>("commandes");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [scope, setScope] = useState<OrderScope>("a_valider");
   const [filter, setFilter] = useState<Filter>("toutes");
   const [historyQuery, setHistoryQuery] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("today");
@@ -140,6 +161,9 @@ export default function CommandesPage() {
   const [rangeEnd, setRangeEnd] = useState(localDateValue(new Date()));
   const [historyPage, setHistoryPage] = useState(1);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
+  const [draftNote, setDraftNote] = useState("");
+  const [addProductId, setAddProductId] = useState("");
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -147,12 +171,14 @@ export default function CommandesPage() {
 
   const loadOrders = useCallback(async () => {
     try {
-      const [nextOrders, nextTables] = await Promise.all([
+      const [nextOrders, nextTables, nextProducts] = await Promise.all([
         fetchAllOrders(),
         fetchRestaurantTables(),
+        fetchProducts(),
       ]);
       setOrders(nextOrders);
       setTables(nextTables);
+      setProducts(nextProducts.filter((p) => p.inStock));
       setError(null);
     } catch (cause) {
       setError(
@@ -181,6 +207,8 @@ export default function CommandesPage() {
   const filtered = useMemo(() => {
     const list = orders.filter((order) => {
       const online = isDirectWebOrder(order);
+      if (scope === "a_valider") return order.status === "a_valider";
+      if (order.status === "a_valider") return false;
       if (scope === "en_ligne" && !online) return false;
       if (scope === "commandes" && online) return false;
       if (
@@ -248,6 +276,11 @@ export default function CommandesPage() {
     scope,
   ]);
 
+  const pendingCount = useMemo(
+    () => orders.filter((o) => o.status === "a_valider").length,
+    [orders]
+  );
+
   const historyPageCount = Math.max(
     1,
     Math.ceil(filtered.length / HISTORY_PAGE_SIZE)
@@ -263,11 +296,95 @@ export default function CommandesPage() {
   useEffect(() => {
     setHistoryPage(1);
     setExpandedOrderId(null);
+    setDraftLines([]);
+    setDraftNote("");
+    setAddProductId("");
   }, [dateFilter, filter, historyQuery, rangeEnd, rangeStart, scope]);
 
   function openScope(nextScope: OrderScope) {
     setScope(nextScope);
     setFilter("toutes");
+  }
+
+  function openOrder(order: Order) {
+    setExpandedOrderId((current) => {
+      if (current === order.id) {
+        setDraftLines([]);
+        setDraftNote("");
+        setAddProductId("");
+        return null;
+      }
+      if (order.status === "a_valider") {
+        setDraftLines(
+          order.lines.map((line) => ({
+            productId: line.product.id,
+            name: line.product.name,
+            price: line.product.price,
+            qty: line.qty,
+            note: line.note,
+          }))
+        );
+        setDraftNote(order.note ?? "");
+        setAddProductId("");
+      } else {
+        setDraftLines([]);
+        setDraftNote("");
+      }
+      return order.id;
+    });
+  }
+
+  const draftTotal = draftLines.reduce(
+    (sum, line) => sum + line.price * line.qty,
+    0
+  );
+
+  async function savePendingEdits(orderId: string) {
+    if (draftLines.length === 0) {
+      throw new Error("La commande doit contenir au moins un article.");
+    }
+    await replacePendingOrderItems(
+      orderId,
+      draftLines.map((line) => ({
+        productId: line.productId,
+        quantity: line.qty,
+        note: line.note,
+      })),
+      draftNote
+    );
+  }
+
+  async function validatePending(order: Order) {
+    setWorkingId(order.id);
+    try {
+      await savePendingEdits(order.id);
+      await validateCustomerOrder(order.id);
+      setExpandedOrderId(null);
+      setDraftLines([]);
+      await loadOrders();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Validation impossible."
+      );
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
+  async function savePendingOnly(order: Order) {
+    setWorkingId(order.id);
+    try {
+      await savePendingEdits(order.id);
+      await loadOrders();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Enregistrement impossible."
+      );
+    } finally {
+      setWorkingId(null);
+    }
   }
 
   async function markAsPaid(order: Order) {
@@ -368,7 +485,7 @@ export default function CommandesPage() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-surface-muted">
+    <div className="ops-readable flex h-full flex-col bg-surface-muted">
       <header className="border-b border-line bg-surface px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -376,8 +493,10 @@ export default function CommandesPage() {
               <ClipboardList size={17} />
             </span>
             <div>
-              <h1 className="font-display text-base font-bold">Commandes</h1>
-              <p className="text-2xs text-ink-faint">
+              <h1 className="font-display text-xl font-bold tracking-tight text-ink">
+                Commandes
+              </h1>
+              <p className="text-sm font-medium text-ink-faint">
                 Suivi, paiement et impression des factures
               </p>
             </div>
@@ -390,11 +509,27 @@ export default function CommandesPage() {
             <RefreshCw size={13} /> Actualiser
           </button>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-1 rounded-full bg-surface-soft p-1 sm:max-w-xs">
+        <div className="mt-3 grid grid-cols-3 gap-1 rounded-full bg-surface-soft p-1 sm:max-w-lg">
+          <button
+            type="button"
+            onClick={() => openScope("a_valider")}
+            className={`relative flex items-center justify-center gap-1.5 rounded-full px-2 py-2 ${
+              scope === "a_valider"
+                ? "bg-brand-500 text-ink shadow-card"
+                : "text-ink-soft"
+            }`}
+          >
+            <Clock3 size={13} /> En attente
+            {pendingCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 font-amount text-[10px] font-bold text-white">
+                {pendingCount}
+              </span>
+            )}
+          </button>
           <button
             type="button"
             onClick={() => openScope("commandes")}
-            className={`flex items-center justify-center gap-1.5 rounded-full px-3 py-2 ${
+            className={`flex items-center justify-center gap-1.5 rounded-full px-2 py-2 ${
               scope === "commandes"
                 ? "bg-brand-500 text-ink shadow-card"
                 : "text-ink-soft"
@@ -405,7 +540,7 @@ export default function CommandesPage() {
           <button
             type="button"
             onClick={() => openScope("historique")}
-            className={`flex items-center justify-center gap-1.5 rounded-full px-3 py-2 ${
+            className={`flex items-center justify-center gap-1.5 rounded-full px-2 py-2 ${
               scope === "historique"
                 ? "bg-brand-500 text-ink shadow-card"
                 : "text-ink-soft"
@@ -426,7 +561,7 @@ export default function CommandesPage() {
                 value={historyQuery}
                 onChange={(event) => setHistoryQuery(event.target.value)}
                 placeholder="Produit, prix ou code (ex. a513)"
-                className="w-full rounded-full border border-line bg-white py-2 pl-9 pr-4 text-xs outline-none focus:border-brand-400"
+                className="w-full rounded-full border border-line bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-brand-400"
               />
             </label>
             <div className="flex gap-1.5 overflow-x-auto">
@@ -460,7 +595,7 @@ export default function CommandesPage() {
                   value={rangeStart}
                   max={rangeEnd || undefined}
                   onChange={(event) => setRangeStart(event.target.value)}
-                  className="rounded-card border border-line bg-white px-3 py-2 text-xs outline-none focus:border-brand-400"
+                  className="rounded-card border border-line bg-white px-3 py-2 text-sm outline-none focus:border-brand-400"
                 />
                 <input
                   type="date"
@@ -468,12 +603,13 @@ export default function CommandesPage() {
                   value={rangeEnd}
                   min={rangeStart || undefined}
                   onChange={(event) => setRangeEnd(event.target.value)}
-                  className="rounded-card border border-line bg-white px-3 py-2 text-xs outline-none focus:border-brand-400"
+                  className="rounded-card border border-line bg-white px-3 py-2 text-sm outline-none focus:border-brand-400"
                 />
               </div>
             )}
           </div>
         )}
+        {scope !== "a_valider" && (
         <div className="mt-3 flex gap-1.5 overflow-x-auto">
           {(
             [
@@ -497,10 +633,11 @@ export default function CommandesPage() {
             </button>
           ))}
         </div>
+        )}
       </header>
 
       {error && (
-        <p className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
+        <p className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           {error}
         </p>
       )}
@@ -509,7 +646,7 @@ export default function CommandesPage() {
         {loading ? (
           <BrandLoader />
         ) : filtered.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-xs text-ink-faint">
+          <div className="flex h-full items-center justify-center text-sm text-ink-faint">
             Aucune commande dans cette section.
           </div>
         ) : (
@@ -525,29 +662,25 @@ export default function CommandesPage() {
                 >
                   <button
                     type="button"
-                    onClick={() =>
-                      setExpandedOrderId((current) =>
-                        current === order.id ? null : order.id
-                      )
-                    }
-                    className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-surface-soft sm:p-4"
+                    onClick={() => openOrder(order)}
+                    className="flex w-full items-center justify-between gap-3 p-3.5 text-left hover:bg-surface-soft sm:p-4"
                     aria-expanded={expandedOrderId === order.id}
                   >
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="font-display text-lg font-bold">
+                        <h2 className="font-amount text-xl font-bold tabular-nums tracking-tight text-ink">
                           #
                           {scope === "historique"
                             ? orderCode(order.number, order.createdAt)
                             : order.number}
                         </h2>
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-2xs ${status.className}`}
+                          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${status.className}`}
                         >
                           {status.label}
                         </span>
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-2xs ${
+                          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
                             order.paymentStatus === "paye"
                               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                               : "border-amber-200 bg-amber-50 text-amber-700"
@@ -558,16 +691,16 @@ export default function CommandesPage() {
                             : "À payer"}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-ink-soft">
+                      <p className="mt-1.5 text-sm font-medium text-ink-soft">
                         {orderLocation(order)} ·{" "}
                         {CHANNEL_META[order.channel]?.label ?? order.channel}
                       </p>
-                      <p className="mt-0.5 text-2xs text-ink-faint">
+                      <p className="mt-0.5 text-xs text-ink-faint">
                         {new Date(order.createdAt).toLocaleString("fr-FR")}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <p className="text-base font-semibold tabular-nums text-brand-600">
+                      <p className="font-amount text-lg font-bold tabular-nums text-brand-700">
                         {formatFCFA(order.total)}
                       </p>
                       <ChevronRight
@@ -580,17 +713,198 @@ export default function CommandesPage() {
                   </button>
 
                   {expandedOrderId === order.id && (
-                  <div className="border-t border-line p-3 sm:p-4">
-                  <ul className="my-3 space-y-1 border-y border-line py-2">
+                  <div className="border-t border-line p-3.5 sm:p-4">
+                  {order.status === "a_valider" ? (
+                    <>
+                      {order.note && draftNote === order.note && (
+                        <p className="mb-2 text-xs text-ink-faint">
+                          Précisions client — modifiables ci-dessous
+                        </p>
+                      )}
+                      <ul className="space-y-2">
+                        {draftLines.map((line, index) => (
+                          <li
+                            key={`${line.productId}-${index}`}
+                            className="rounded-card border border-line bg-surface-muted p-2.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                                {line.name}
+                              </p>
+                              <p className="shrink-0 font-amount text-sm font-semibold tabular-nums text-brand-700">
+                                {formatFCFA(line.price * line.qty)}
+                              </p>
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() =>
+                                  setDraftLines((prev) =>
+                                    prev
+                                      .map((l, i) =>
+                                        i === index
+                                          ? { ...l, qty: l.qty - 1 }
+                                          : l
+                                      )
+                                      .filter((l) => l.qty > 0)
+                                  )
+                                }
+                                className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-white"
+                                aria-label="Diminuer"
+                              >
+                                <Minus size={12} />
+                              </button>
+                              <span className="w-6 text-center font-amount text-sm font-bold">
+                                {line.qty}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() =>
+                                  setDraftLines((prev) =>
+                                    prev.map((l, i) =>
+                                      i === index
+                                        ? { ...l, qty: Math.min(99, l.qty + 1) }
+                                        : l
+                                    )
+                                  )
+                                }
+                                className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-white"
+                                aria-label="Augmenter"
+                              >
+                                <Plus size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() =>
+                                  setDraftLines((prev) =>
+                                    prev.filter((_, i) => i !== index)
+                                  )
+                                }
+                                className="ml-auto flex h-7 w-7 items-center justify-center rounded-full border border-red-200 text-red-600"
+                                aria-label="Retirer"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+
+                      <div className="mt-3 flex gap-2">
+                        <select
+                          value={addProductId}
+                          onChange={(e) => setAddProductId(e.target.value)}
+                          className="min-w-0 flex-1 rounded-card border border-line bg-white px-2.5 py-2 text-sm outline-none focus:border-brand-400"
+                        >
+                          <option value="">Ajouter un plat…</option>
+                          {products.map((product) => (
+                            <option key={product.id} value={product.id}>
+                              {product.name} — {formatFCFA(product.price)}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!addProductId || busy}
+                          onClick={() => {
+                            const product = products.find(
+                              (p) => p.id === addProductId
+                            );
+                            if (!product) return;
+                            setDraftLines((prev) => {
+                              const existing = prev.find(
+                                (l) => l.productId === product.id
+                              );
+                              if (existing) {
+                                return prev.map((l) =>
+                                  l.productId === product.id
+                                    ? { ...l, qty: Math.min(99, l.qty + 1) }
+                                    : l
+                                );
+                              }
+                              return [
+                                ...prev,
+                                {
+                                  productId: product.id,
+                                  name: product.name,
+                                  price: product.price,
+                                  qty: 1,
+                                },
+                              ];
+                            });
+                            setAddProductId("");
+                          }}
+                          className="shrink-0 rounded-full bg-brand-500 px-3 py-2 text-ink disabled:opacity-50"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+
+                      <label className="mt-3 block">
+                        <span className="mb-1 block text-xs font-medium text-ink-soft">
+                          Précisions
+                        </span>
+                        <textarea
+                          value={draftNote}
+                          onChange={(e) => setDraftNote(e.target.value)}
+                          rows={2}
+                          placeholder="Moins de sel, beaucoup de piment…"
+                          className="w-full rounded-card border border-line bg-white px-3 py-2 text-sm outline-none focus:border-brand-400"
+                        />
+                      </label>
+
+                      <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
+                        <span className="text-sm text-ink-soft">Total</span>
+                        <span className="font-amount text-lg font-bold tabular-nums text-brand-700">
+                          {formatFCFA(draftTotal)}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void savePendingOnly(order)}
+                          className="flex items-center gap-1.5 rounded-full border border-line px-3 py-2 text-ink-soft hover:bg-surface-soft disabled:opacity-50"
+                        >
+                          Enregistrer
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy || draftLines.length === 0}
+                          onClick={() => void validatePending(order)}
+                          className="flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-2 text-ink hover:bg-emerald-600 disabled:opacity-50"
+                        >
+                          <Send size={13} /> Valider → cuisine
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void cancelOrder(order)}
+                          className="flex items-center gap-1.5 rounded-full border border-red-200 px-3 py-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <Ban size={13} /> Refuser
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                  <ul className="my-3 space-y-2 border-y border-line py-3">
                     {order.lines.map(({ product, qty }) => (
                       <li
                         key={product.id}
-                        className="flex justify-between gap-3 text-xs"
+                        className="flex justify-between gap-3 text-sm"
                       >
-                        <span className="min-w-0 truncate">
-                          {qty} × {product.name}
+                        <span className="min-w-0 truncate font-medium text-ink">
+                          <span className="font-amount font-bold tabular-nums text-brand-700">
+                            {qty}×
+                          </span>{" "}
+                          {product.name}
                         </span>
-                        <span className="shrink-0 tabular-nums text-ink-soft">
+                        <span className="shrink-0 font-amount text-sm font-semibold tabular-nums text-ink-soft">
                           {formatFCFA(product.price * qty)}
                         </span>
                       </li>
@@ -598,13 +912,13 @@ export default function CommandesPage() {
                   </ul>
 
                   {order.note && (
-                    <p className="mb-3 rounded-card bg-brand-50 px-3 py-2 text-2xs text-brand-700">
+                    <p className="mb-3 rounded-card bg-brand-50 px-3 py-2 text-sm font-medium text-brand-700">
                       {order.note}
                     </p>
                   )}
 
                   {(order.customerPhone || order.deliveryAddress) && (
-                    <div className="mb-3 rounded-card border border-line bg-surface-muted px-3 py-2 text-xs text-ink-soft">
+                    <div className="mb-3 rounded-card border border-line bg-surface-muted px-3 py-2 text-sm text-ink-soft">
                       {order.customerPhone && (
                         <p>Tél. : {order.customerPhone}</p>
                       )}
@@ -618,7 +932,7 @@ export default function CommandesPage() {
                     order.status !== "annule" && (
                       <div className="mb-3 space-y-2">
                         <label className="block">
-                          <span className="mb-1 block text-2xs text-ink-soft">
+                          <span className="mb-1 block text-xs font-medium text-ink-soft">
                             Table
                           </span>
                           <select
@@ -627,7 +941,7 @@ export default function CommandesPage() {
                             onChange={(event) =>
                               void changeTable(order, event.target.value)
                             }
-                            className="w-full rounded-card border border-line bg-surface-muted px-2.5 py-2 text-xs outline-none focus:border-brand-400 disabled:opacity-50"
+                            className="w-full rounded-card border border-line bg-surface-muted px-2.5 py-2 text-sm outline-none focus:border-brand-400 disabled:opacity-50"
                           >
                             <option value="">Sans table</option>
                             {tables.map((table) => (
@@ -710,6 +1024,8 @@ export default function CommandesPage() {
                       </button>
                     )}
                   </div>
+                    </>
+                  )}
                   </div>
                   )}
                 </article>

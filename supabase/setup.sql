@@ -158,7 +158,7 @@ create table if not exists public."diego-orders" (
   channel text not null check (channel in ('comptoir', 'table', 'emporter', 'livraison')),
   status text not null default 'en_attente' check (
     status in (
-      'en_attente', 'preparation', 'pret', 'servi',
+      'a_valider', 'en_attente', 'preparation', 'pret', 'servi',
       'en_livraison', 'livre', 'annule'
     )
   ),
@@ -195,7 +195,7 @@ create table if not exists public."diego-order-events" (
   order_id uuid not null references public."diego-orders"(id) on delete cascade,
   status text not null check (
     status in (
-      'en_attente', 'preparation', 'pret', 'servi',
+      'a_valider', 'en_attente', 'preparation', 'pret', 'servi',
       'en_livraison', 'livre', 'annule'
     )
   ),
@@ -319,6 +319,7 @@ begin
   insert into public."diego-orders" (
     customer_id,
     channel,
+    status,
     restaurant_table_id,
     customer_name,
     customer_phone,
@@ -329,6 +330,7 @@ begin
   values (
     auth.uid(),
     p_channel,
+    'a_valider',
     v_table_id,
     nullif(trim(p_customer_name), ''),
     nullif(trim(p_customer_phone), ''),
@@ -368,6 +370,12 @@ begin
   ) totals
   where o.id = v_order_id;
 
+  if v_table_id is not null then
+    update public."diego-restaurant-tables"
+    set status = 'occupee'
+    where id = v_table_id;
+  end if;
+
   return query
   select o.id, o.order_number, o.tracking_token, o.total
   from public."diego-orders" o
@@ -381,6 +389,67 @@ revoke all on function public.diego_create_order(
 grant execute on function public.diego_create_order(
   text, jsonb, uuid, text, text, text, timestamptz, text
 ) to anon, authenticated;
+
+-- Commande active d'une table : disponible tant que la table n'est pas « libre ».
+create or replace function public.diego_track_table_order(p_table_qr_token uuid)
+returns table (
+  id uuid,
+  order_number bigint,
+  status text,
+  channel text,
+  total integer,
+  created_at timestamptz,
+  table_status text
+)
+language plpgsql
+security definer
+set search_path = public
+stable
+as $$
+declare
+  v_table_id uuid;
+  v_table_status text;
+begin
+  select t.id, t.status into v_table_id, v_table_status
+  from public."diego-restaurant-tables" t
+  where t.qr_token = p_table_qr_token and t.active;
+
+  if v_table_id is null then
+    return;
+  end if;
+
+  if v_table_status = 'libre' then
+    return query
+    select
+      null::uuid,
+      null::bigint,
+      null::text,
+      null::text,
+      null::integer,
+      null::timestamptz,
+      v_table_status;
+    return;
+  end if;
+
+  return query
+  select
+    o.id,
+    o.order_number,
+    o.status,
+    o.channel,
+    o.total,
+    o.created_at,
+    v_table_status
+  from public."diego-orders" o
+  where o.restaurant_table_id = v_table_id
+    and o.status <> 'annule'
+  order by o.created_at desc
+  limit 1;
+end;
+$$;
+
+revoke all on function public.diego_track_table_order(uuid) from public;
+grant execute on function public.diego_track_table_order(uuid) to anon, authenticated;
 
 -- Suivi de commande public par numéro : colonnes limitées, aucune donnée client.
 create or replace function public.diego_track_order(p_order_number bigint)
@@ -860,6 +929,289 @@ $$;
 
 revoke all on function public.diego_track_order(bigint) from public;
 grant execute on function public.diego_track_order(bigint) to anon, authenticated;
+
+create or replace function public.diego_customer_order_receipt(p_order_number bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+stable
+as $$
+declare
+  v_result jsonb;
+begin
+  select jsonb_build_object(
+    'id', o.id,
+    'orderNumber', o.order_number,
+    'status', o.status,
+    'channel', o.channel,
+    'total', o.total,
+    'createdAt', o.created_at,
+    'tableStatus', null,
+    'items', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'name', oi.product_name,
+          'quantity', oi.quantity,
+          'unitPrice', oi.unit_price,
+          'lineTotal', oi.unit_price * oi.quantity,
+          'note', oi.note
+        )
+        order by oi.created_at
+      )
+      from public."diego-order-items" oi
+      where oi.order_id = o.id
+    ), '[]'::jsonb)
+  )
+  into v_result
+  from public."diego-orders" o
+  where o.order_number = p_order_number;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.diego_customer_order_receipt(bigint) from public;
+grant execute on function public.diego_customer_order_receipt(bigint) to anon, authenticated;
+
+create or replace function public.diego_customer_table_receipt(p_table_qr_token uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+stable
+as $$
+declare
+  v_table_id uuid;
+  v_table_status text;
+  v_order_id uuid;
+  v_order_number bigint;
+  v_status text;
+  v_channel text;
+  v_created_at timestamptz;
+  v_total integer;
+  v_items jsonb;
+begin
+  select t.id, t.status into v_table_id, v_table_status
+  from public."diego-restaurant-tables" t
+  where t.qr_token = p_table_qr_token and t.active;
+
+  if v_table_id is null then
+    return null;
+  end if;
+
+  if v_table_status = 'libre' then
+    return jsonb_build_object(
+      'id', null,
+      'orderNumber', null,
+      'status', null,
+      'channel', 'table',
+      'total', 0,
+      'createdAt', null,
+      'tableStatus', 'libre',
+      'items', '[]'::jsonb
+    );
+  end if;
+
+  select
+    o.id,
+    o.order_number,
+    o.status,
+    o.channel,
+    o.created_at
+  into
+    v_order_id,
+    v_order_number,
+    v_status,
+    v_channel,
+    v_created_at
+  from public."diego-orders" o
+  where o.restaurant_table_id = v_table_id
+    and o.status <> 'annule'
+  order by o.created_at desc
+  limit 1;
+
+  if v_order_id is null then
+    return jsonb_build_object(
+      'id', null,
+      'orderNumber', null,
+      'status', null,
+      'channel', 'table',
+      'total', 0,
+      'createdAt', null,
+      'tableStatus', v_table_status,
+      'items', '[]'::jsonb
+    );
+  end if;
+
+  select
+    coalesce(sum(oi.unit_price * oi.quantity), 0)::integer,
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'name', oi.product_name,
+          'quantity', oi.quantity,
+          'unitPrice', oi.unit_price,
+          'lineTotal', oi.unit_price * oi.quantity,
+          'note', oi.note
+        )
+        order by oi.created_at
+      ),
+      '[]'::jsonb
+    )
+  into v_total, v_items
+  from public."diego-order-items" oi
+  join public."diego-orders" o on o.id = oi.order_id
+  where o.restaurant_table_id = v_table_id
+    and o.status <> 'annule';
+
+  return jsonb_build_object(
+    'id', v_order_id,
+    'orderNumber', v_order_number,
+    'status', v_status,
+    'channel', coalesce(v_channel, 'table'),
+    'total', v_total,
+    'createdAt', v_created_at,
+    'tableStatus', v_table_status,
+    'items', v_items
+  );
+end;
+$$;
+
+revoke all on function public.diego_customer_table_receipt(uuid) from public;
+grant execute on function public.diego_customer_table_receipt(uuid) to anon, authenticated;
+
+create or replace function public.diego_replace_pending_order_items(
+  p_order_id uuid,
+  p_items jsonb,
+  p_note text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_status text;
+  v_expected integer;
+  v_valid integer;
+begin
+  if not public.diego_is_staff() then
+    raise exception 'Staff only';
+  end if;
+
+  select o.status into v_status
+  from public."diego-orders" o
+  where o.id = p_order_id;
+
+  if v_status is null then
+    raise exception 'Order not found';
+  end if;
+
+  if v_status <> 'a_valider' then
+    raise exception 'Only pending web orders can be edited';
+  end if;
+
+  if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
+    raise exception 'Order must contain at least one item';
+  end if;
+
+  v_expected := jsonb_array_length(p_items);
+
+  select count(*) into v_valid
+  from jsonb_to_recordset(p_items) as input(product_id uuid, quantity integer, note text)
+  join public."diego-products" p on p.id = input.product_id
+  where p.active and input.quantity between 1 and 99;
+
+  if v_valid <> v_expected then
+    raise exception 'One or more products are invalid';
+  end if;
+
+  delete from public."diego-order-items" where order_id = p_order_id;
+
+  insert into public."diego-order-items" (
+    order_id,
+    product_id,
+    product_name,
+    unit_price,
+    quantity,
+    note
+  )
+  select
+    p_order_id,
+    p.id,
+    p.name,
+    p.price,
+    input.quantity,
+    nullif(trim(input.note), '')
+  from jsonb_to_recordset(p_items) as input(product_id uuid, quantity integer, note text)
+  join public."diego-products" p on p.id = input.product_id
+  where p.active;
+
+  update public."diego-orders" o
+  set
+    note = nullif(trim(p_note), ''),
+    subtotal = totals.amount,
+    total = totals.amount
+  from (
+    select sum(oi.unit_price * oi.quantity)::integer as amount
+    from public."diego-order-items" oi
+    where oi.order_id = p_order_id
+  ) totals
+  where o.id = p_order_id;
+end;
+$$;
+
+revoke all on function public.diego_replace_pending_order_items(uuid, jsonb, text) from public;
+grant execute on function public.diego_replace_pending_order_items(uuid, jsonb, text) to authenticated;
+
+create or replace function public.diego_validate_customer_order(p_order_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_status text;
+begin
+  if not public.diego_is_staff() then
+    raise exception 'Staff only';
+  end if;
+
+  select o.status into v_status
+  from public."diego-orders" o
+  where o.id = p_order_id;
+
+  if v_status is null then
+    raise exception 'Order not found';
+  end if;
+
+  if v_status <> 'a_valider' then
+    raise exception 'Order is not pending validation';
+  end if;
+
+  update public."diego-orders"
+  set status = 'en_attente'
+  where id = p_order_id;
+end;
+$$;
+
+revoke all on function public.diego_validate_customer_order(uuid) from public;
+grant execute on function public.diego_validate_customer_order(uuid) to authenticated;
+
+-- Table de démo pour tester le parcours client.
+insert into public."diego-restaurant-tables" (
+  label, seats, status, position_x, position_y, qr_token, active
+)
+values (
+  'Table Test', 4, 'libre', 20, 20,
+  'a0000000-0000-4000-8000-000000000001'::uuid, true
+)
+on conflict (label) do update set
+  qr_token = excluded.qr_token,
+  seats = excluded.seats,
+  active = true,
+  updated_at = now();
 
 -- =============================================================================
 -- Fin du script. Rechargez les applications : le menu, les tables et les

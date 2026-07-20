@@ -13,12 +13,15 @@ interface CartState {
   channel: OrderChannel;
   payment: PaymentMethod;
   restaurantTableId: string | null;
+  /** Montant remis par le client (FCFA). */
+  amountReceived: number;
   add: (product: Product) => void;
   remove: (productId: string) => void;
   setQty: (productId: string, qty: number) => void;
   setChannel: (channel: OrderChannel) => void;
   setPayment: (payment: PaymentMethod) => void;
   setRestaurantTableId: (tableId: string | null) => void;
+  setAmountReceived: (amount: number) => void;
   clear: () => void;
 }
 
@@ -27,6 +30,7 @@ export const useCart = create<CartState>((set) => ({
   channel: "table",
   payment: "especes",
   restaurantTableId: null,
+  amountReceived: 0,
   add: (product) =>
     set((s) => {
       const existing = s.lines.find((l) => l.product.id === product.id);
@@ -62,9 +66,16 @@ export const useCart = create<CartState>((set) => ({
         ? { restaurantTableId, channel: "table" as const }
         : { restaurantTableId: null }
     ),
-  clear: () => set({ lines: [], restaurantTableId: null }),
+  setAmountReceived: (amountReceived) =>
+    set({ amountReceived: Math.max(0, Math.floor(amountReceived) || 0) }),
+  clear: () => set({ lines: [], restaurantTableId: null, amountReceived: 0 }),
 }));
 
 export function cartTotal(lines: CartLine[]): number {
   return lines.reduce((sum, l) => sum + l.product.price * l.qty, 0);
+}
+
+export function cartChange(amountReceived: number, total: number): number {
+  if (amountReceived <= 0 || total <= 0) return 0;
+  return Math.max(0, amountReceived - total);
 }

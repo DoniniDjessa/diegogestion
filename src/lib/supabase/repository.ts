@@ -13,7 +13,7 @@ import type {
   TableStatus,
 } from "@/lib/types";
 import { DIEGO_STORAGE_BUCKET, DIEGO_TABLES } from "./constants";
-import { fetchCurrentRole, isAdminRole } from "@/lib/auth";
+import { fetchCurrentRole, isAdminRole, isStaffRole } from "@/lib/auth";
 import { compressImage } from "@/lib/image";
 
 type ProductRow = {
@@ -24,6 +24,7 @@ type ProductRow = {
   price: number;
   image_path: string | null;
   in_stock: boolean;
+  stock_qty: number;
   signature: boolean;
   sort_order: number;
 };
@@ -95,6 +96,7 @@ function toProduct(row: ProductRow): Product {
     category: row.category,
     price: row.price,
     inStock: row.in_stock,
+    stockQty: row.stock_qty ?? 0,
     imageUrl: productImageUrl(row.image_path),
     imagePath: row.image_path,
     signature: row.signature,
@@ -127,7 +129,7 @@ export async function fetchProducts(): Promise<Product[]> {
   const { data, error } = await requireSupabase()
     .from(DIEGO_TABLES.products)
     .select(
-      "id,name,description,category,price,image_path,in_stock,signature,sort_order"
+      "id,name,description,category,price,image_path,in_stock,stock_qty,signature,sort_order"
     )
     .eq("active", true)
     .order("sort_order")
@@ -212,15 +214,32 @@ export async function setProductStock(
   productId: string,
   inStock: boolean
 ): Promise<void> {
-  const { data, error } = await (await requireAdminSession())
+  const supabase = await requireAdminSession();
+  const { data, error } = await supabase
     .from(DIEGO_TABLES.products)
-    .update({ in_stock: inStock })
+    .update({
+      in_stock: inStock,
+      ...(inStock ? {} : { stock_qty: 0 }),
+    })
     .eq("id", productId)
     .select("id")
     .maybeSingle();
 
   if (error) throw error;
   if (!data) throw new Error("Product update was not authorized.");
+}
+
+/** Fixe la quantité de stock d'une boisson (admin uniquement). */
+export async function setDrinkStockQty(
+  productId: string,
+  qty: number
+): Promise<void> {
+  const supabase = await requireAdminSession();
+  const { error } = await supabase.rpc("diego_set_drink_stock_qty", {
+    p_product_id: productId,
+    p_qty: Math.max(0, Math.floor(qty)),
+  });
+  if (error) throw error;
 }
 
 export type ProductInput = {
@@ -658,7 +677,15 @@ export type CreatedPosOrder = {
 export async function createPosOrder(
   input: PosOrderInput
 ): Promise<CreatedPosOrder> {
-  const { data, error } = await requireSupabase().rpc("diego_create_pos_order", {
+  const supabase = await requireAuthenticatedSession();
+  const role = await fetchCurrentRole();
+  if (!isStaffRole(role)) {
+    throw new Error(
+      "Compte staff requis (superAdmin, admin ou caissier) enregistré dans Diego."
+    );
+  }
+
+  const { data, error } = await supabase.rpc("diego_create_pos_order", {
     p_channel: input.channel,
     p_payment_method: input.payment,
     p_restaurant_table_id: input.restaurantTableId ?? null,
@@ -670,7 +697,7 @@ export async function createPosOrder(
     })),
   });
 
-  if (error) throw error;
+  if (error) throw new Error(mapPosOrderError(error.message));
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error("Supabase did not return the created POS order.");
 
@@ -679,6 +706,36 @@ export async function createPosOrder(
     orderNumber: row.order_number,
     total: row.total,
   };
+}
+
+function mapPosOrderError(message: string | undefined): string {
+  const raw = (message ?? "").trim();
+  const lower = raw.toLowerCase();
+  if (
+    lower.includes("staff authentication required") ||
+    lower.includes("staff only")
+  ) {
+    return "Session staff invalide. Reconnectez-vous avec un compte Diego (superAdmin, admin ou caissier).";
+  }
+  if (
+    lower.includes("invalid or unavailable") ||
+    lower.includes("unavailable")
+  ) {
+    return "Un ou plusieurs produits sont indisponibles ou en rupture de stock.";
+  }
+  if (lower.includes("invalid payment")) {
+    return "Moyen de paiement invalide.";
+  }
+  if (lower.includes("invalid pos order channel")) {
+    return "Canal de commande invalide.";
+  }
+  if (lower.includes("invalid restaurant table")) {
+    return "Table introuvable.";
+  }
+  if (lower.includes("at least one item")) {
+    return "Ajoutez au moins un article.";
+  }
+  return raw || "Commande refusée.";
 }
 
 export function subscribeToRestaurantChanges(
@@ -722,4 +779,82 @@ export async function removeRealtimeChannel(
 ): Promise<void> {
   const supabase = getSupabase();
   if (supabase && channel) await supabase.removeChannel(channel);
+}
+
+export type Expense = {
+  id: string;
+  label: string;
+  amount: number;
+  category?: string;
+  note?: string;
+  expenseDate: string;
+  createdAt: string;
+};
+
+type ExpenseRow = {
+  id: string;
+  label: string;
+  amount: number;
+  category: string | null;
+  note: string | null;
+  expense_date: string;
+  created_at: string;
+};
+
+export async function fetchExpenses(): Promise<Expense[]> {
+  const supabase = await requireAuthenticatedSession();
+  const { data, error } = await supabase
+    .from(DIEGO_TABLES.expenses)
+    .select("id,label,amount,category,note,expense_date,created_at")
+    .order("expense_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) throw error;
+  return ((data ?? []) as ExpenseRow[]).map((row) => ({
+    id: row.id,
+    label: row.label,
+    amount: row.amount,
+    category: row.category ?? undefined,
+    note: row.note ?? undefined,
+    expenseDate: row.expense_date,
+    createdAt: row.created_at,
+  }));
+}
+
+export type ExpenseInput = {
+  label: string;
+  amount: number;
+  category?: string;
+  note?: string;
+  expenseDate?: string;
+};
+
+export async function createExpense(input: ExpenseInput): Promise<void> {
+  const supabase = await requireAdminSession();
+  const { data, error } = await supabase
+    .from(DIEGO_TABLES.expenses)
+    .insert({
+      label: input.label.trim(),
+      amount: input.amount,
+      category: input.category?.trim() || null,
+      note: input.note?.trim() || null,
+      expense_date: input.expenseDate ?? new Date().toISOString().slice(0, 10),
+    })
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Création de dépense refusée.");
+}
+
+export async function deleteExpense(expenseId: string): Promise<void> {
+  const supabase = await requireAdminSession();
+  const { data, error } = await supabase
+    .from(DIEGO_TABLES.expenses)
+    .delete()
+    .eq("id", expenseId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Suppression refusée.");
 }

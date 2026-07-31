@@ -94,7 +94,7 @@ export default function CaissePage() {
   );
 
   const activeCategoryLabel =
-    category === "all" ? "Tout le menu" : categoryLabel(category);
+    category === "all" ? "Caisse" : categoryLabel(category);
 
   return (
     <div className="flex h-full bg-transparent">

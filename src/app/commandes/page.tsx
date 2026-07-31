@@ -20,6 +20,7 @@ import {
   Truck,
 } from "lucide-react";
 import { BrandLoader } from "@/components/BrandLoader";
+import { ListPagination } from "@/components/ListPagination";
 import { CHANNEL_META, formatFCFA } from "@/lib/data";
 import type { Order, OrderStatus, Product, RestaurantTable } from "@/lib/types";
 import {
@@ -91,7 +92,7 @@ type DraftLine = {
   note?: string;
 };
 
-const HISTORY_PAGE_SIZE = 10;
+const LIST_PAGE_SIZE = 10;
 
 function isDirectWebOrder(order: Order): boolean {
   // Les commandes web (anonymes) n'ont pas de moyen de paiement choisi en caisse.
@@ -211,6 +212,7 @@ export default function CommandesPage() {
       if (order.status === "a_valider") return false;
       if (scope === "en_ligne" && !online) return false;
       if (scope === "commandes" && online) return false;
+      if (scope === "commandes" && order.channel === "livraison") return false;
       if (
         scope === "en_ligne" &&
         ["pret", "en_livraison", "livre"].includes(order.status)
@@ -281,17 +283,18 @@ export default function CommandesPage() {
     [orders]
   );
 
-  const historyPageCount = Math.max(
+  const listPageCount = Math.max(
     1,
-    Math.ceil(filtered.length / HISTORY_PAGE_SIZE)
+    Math.ceil(filtered.length / LIST_PAGE_SIZE)
   );
-  const displayedOrders =
-    scope === "historique"
-      ? filtered.slice(
-          (historyPage - 1) * HISTORY_PAGE_SIZE,
-          historyPage * HISTORY_PAGE_SIZE
-        )
-      : filtered;
+  const displayedOrders = filtered.slice(
+    (historyPage - 1) * LIST_PAGE_SIZE,
+    historyPage * LIST_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    if (historyPage > listPageCount) setHistoryPage(listPageCount);
+  }, [historyPage, listPageCount]);
 
   useEffect(() => {
     setHistoryPage(1);
@@ -564,28 +567,41 @@ export default function CommandesPage() {
                 className="w-full rounded-full border border-line bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-brand-400"
               />
             </label>
-            <div className="flex gap-1.5 overflow-x-auto">
-              {(
-                [
-                  ["today", "Aujourd’hui"],
-                  ["week", "Cette semaine"],
-                  ["month", "Ce mois"],
-                  ["range", "Période"],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setDateFilter(id)}
-                  className={`shrink-0 rounded-full border px-3 py-1.5 ${
-                    dateFilter === id
-                      ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-line bg-white text-ink-soft"
-                  }`}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-ink-soft">
+                  Période
+                </span>
+                <select
+                  value={dateFilter}
+                  onChange={(event) =>
+                    setDateFilter(event.target.value as DateFilter)
+                  }
+                  className="w-full rounded-card border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-400"
                 >
-                  {label}
-                </button>
-              ))}
+                  <option value="today">Aujourd’hui</option>
+                  <option value="week">Cette semaine</option>
+                  <option value="month">Ce mois</option>
+                  <option value="range">Période personnalisée</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-ink-soft">
+                  Statut
+                </span>
+                <select
+                  value={filter}
+                  onChange={(event) =>
+                    setFilter(event.target.value as Filter)
+                  }
+                  className="w-full rounded-card border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-400"
+                >
+                  <option value="toutes">Toutes</option>
+                  <option value="actives">Actives</option>
+                  <option value="payees">Payées</option>
+                  <option value="annulees">Annulées</option>
+                </select>
+              </label>
             </div>
             {dateFilter === "range" && (
               <div className="grid grid-cols-2 gap-2">
@@ -609,7 +625,7 @@ export default function CommandesPage() {
             )}
           </div>
         )}
-        {scope !== "a_valider" && (
+        {scope !== "a_valider" && scope !== "historique" && (
         <div className="mt-3 flex gap-1.5 overflow-x-auto">
           {(
             [
@@ -1032,41 +1048,15 @@ export default function CommandesPage() {
               );
             })}
             </div>
-            {scope === "historique" && historyPageCount > 1 && (
-              <nav
-                className="mx-auto mt-4 flex max-w-6xl items-center justify-center gap-3"
-                aria-label="Pagination de l’historique"
-              >
-                <button
-                  type="button"
-                  disabled={historyPage === 1}
-                  onClick={() =>
-                    setHistoryPage((page) => Math.max(1, page - 1))
-                  }
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-white text-ink-soft disabled:opacity-30"
-                  aria-label="Page précédente"
-                >
-                  <ChevronLeft size={15} />
-                </button>
-                <span className="text-xs text-ink-soft">
-                  Page {historyPage} sur {historyPageCount} · {filtered.length}{" "}
-                  commande{filtered.length > 1 ? "s" : ""}
-                </span>
-                <button
-                  type="button"
-                  disabled={historyPage === historyPageCount}
-                  onClick={() =>
-                    setHistoryPage((page) =>
-                      Math.min(historyPageCount, page + 1)
-                    )
-                  }
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-white text-ink-soft disabled:opacity-30"
-                  aria-label="Page suivante"
-                >
-                  <ChevronRight size={15} />
-                </button>
-              </nav>
-            )}
+            <ListPagination
+              page={historyPage}
+              pageCount={listPageCount}
+              totalItems={filtered.length}
+              itemLabel="commande"
+              onPageChange={setHistoryPage}
+              className="mx-auto mt-4 max-w-6xl"
+              ariaLabel="Pagination des commandes"
+            />
           </>
         )}
       </div>

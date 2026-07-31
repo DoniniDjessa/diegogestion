@@ -27,7 +27,6 @@ export default function ParametresLayout({
   }, []);
 
   const tabs = [
-    { href: "/parametres/compte", label: "Compte", icon: LogIn },
     ...(isAdminRole(role)
       ? [
           {
@@ -35,6 +34,11 @@ export default function ParametresLayout({
             label: "Menu",
             icon: UtensilsCrossed,
           },
+        ]
+      : []),
+    { href: "/parametres/compte", label: "Compte", icon: LogIn },
+    ...(isAdminRole(role)
+      ? [
           {
             href: "/parametres/utilisateurs",
             label: "Utilisateurs",

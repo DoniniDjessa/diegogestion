@@ -6,6 +6,7 @@ export const DIEGO_TABLES = {
   orders: "diego-orders",
   orderItems: "diego-order-items",
   orderEvents: "diego-order-events",
+  expenses: "diego-expenses",
 } as const;
 
 export const DIEGO_STORAGE_BUCKET = "diego bucket";

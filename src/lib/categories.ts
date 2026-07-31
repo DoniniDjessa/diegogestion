@@ -18,6 +18,25 @@ export const FIXED_CATEGORIES: MenuCategory[] = [
   { id: "boissons-chaudes", slug: "boissons-chaudes", label: "Boissons Chaudes", sortOrder: 90 },
 ];
 
+/** Catégories boissons uniquement (pas de plats / accompagnements). */
+export const DRINK_CATEGORY_SLUGS = [
+  "cocktails",
+  "vins",
+  "spiritueux-bieres",
+  "softs-jus",
+  "boissons-chaudes",
+] as const;
+
+export type DrinkCategorySlug = (typeof DRINK_CATEGORY_SLUGS)[number];
+
+export const DRINK_CATEGORIES: MenuCategory[] = FIXED_CATEGORIES.filter((item) =>
+  (DRINK_CATEGORY_SLUGS as readonly string[]).includes(item.slug)
+);
+
+export function isDrinkCategory(slug: string): boolean {
+  return (DRINK_CATEGORY_SLUGS as readonly string[]).includes(slug);
+}
+
 export function categoryLabel(slug: string): string {
   return FIXED_CATEGORIES.find((item) => item.slug === slug)?.label ?? slug;
 }

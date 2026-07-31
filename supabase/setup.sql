@@ -1213,6 +1213,145 @@ on conflict (label) do update set
   active = true,
   updated_at = now();
 
+-- Dépenses (finances)
+create table if not exists public."diego-expenses" (
+  id uuid primary key default gen_random_uuid(),
+  label text not null,
+  amount integer not null check (amount > 0),
+  category text,
+  note text,
+  expense_date date not null default current_date,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists "diego-expenses-date-idx"
+  on public."diego-expenses"(expense_date desc, created_at desc);
+
+alter table public."diego-expenses" enable row level security;
+
+drop policy if exists "Staff view Diego expenses" on public."diego-expenses";
+create policy "Staff view Diego expenses"
+on public."diego-expenses" for select
+to authenticated
+using (public.diego_is_staff());
+
+drop policy if exists "Admins manage Diego expenses" on public."diego-expenses";
+create policy "Admins manage Diego expenses"
+on public."diego-expenses" for all
+to authenticated
+using (public.diego_is_admin())
+with check (public.diego_is_admin());
+
+-- Stock quantité boissons
+alter table public."diego-products"
+  add column if not exists stock_qty integer not null default 0;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'diego-products_stock_qty_check'
+  ) then
+    alter table public."diego-products"
+      add constraint "diego-products_stock_qty_check" check (stock_qty >= 0);
+  end if;
+end $$;
+
+create or replace function public.diego_is_drink_category(p_category text)
+returns boolean
+language sql
+immutable
+as $$
+  select p_category in (
+    'cocktails',
+    'vins',
+    'spiritueux-bieres',
+    'softs-jus',
+    'boissons-chaudes'
+  );
+$$;
+
+create or replace function public.diego_set_drink_stock_qty(
+  p_product_id uuid,
+  p_qty integer
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_category text;
+begin
+  if auth.uid() is null or not public.diego_is_admin() then
+    raise exception 'Admin only';
+  end if;
+
+  if p_qty is null or p_qty < 0 then
+    raise exception 'Invalid stock quantity';
+  end if;
+
+  select category into v_category
+  from public."diego-products"
+  where id = p_product_id and active;
+
+  if v_category is null then
+    raise exception 'Product not found';
+  end if;
+
+  if not public.diego_is_drink_category(v_category) then
+    raise exception 'Stock quantity is only for drinks';
+  end if;
+
+  update public."diego-products"
+  set
+    stock_qty = p_qty,
+    in_stock = (p_qty > 0),
+    updated_at = now()
+  where id = p_product_id;
+end;
+$$;
+
+revoke all on function public.diego_set_drink_stock_qty(uuid, integer) from public;
+grant execute on function public.diego_set_drink_stock_qty(uuid, integer) to authenticated;
+
+create or replace function public.diego_decrement_drink_stock_on_paid()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.payment_status = 'paye'
+     and coalesce(old.payment_status, '') is distinct from 'paye'
+  then
+    update public."diego-products" p
+    set
+      stock_qty = greatest(0, p.stock_qty - oi.qty),
+      in_stock = greatest(0, p.stock_qty - oi.qty) > 0,
+      updated_at = now()
+    from (
+      select product_id, sum(quantity)::integer as qty
+      from public."diego-order-items"
+      where order_id = new.id
+        and product_id is not null
+      group by product_id
+    ) oi
+    where p.id = oi.product_id
+      and public.diego_is_drink_category(p.category);
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists "diego-orders-decrement-drink-stock"
+  on public."diego-orders";
+create trigger "diego-orders-decrement-drink-stock"
+after update of payment_status on public."diego-orders"
+for each row
+execute function public.diego_decrement_drink_stock_on_paid();
+
 -- =============================================================================
 -- Fin du script. Rechargez les applications : le menu, les tables et les
 -- catégories doivent maintenant s'afficher.

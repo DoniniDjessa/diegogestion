@@ -20,7 +20,9 @@ function canOpenPath(role: UserRole | null, pathname: string): boolean {
       pathname === "/" ||
       pathname.startsWith("/caisse") ||
       pathname.startsWith("/cuisine") ||
+      pathname.startsWith("/stock") ||
       pathname.startsWith("/commandes") ||
+      pathname.startsWith("/livraisons") ||
       pathname === "/parametres" ||
       pathname.startsWith("/parametres/compte")
     );

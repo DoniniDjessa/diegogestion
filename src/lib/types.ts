@@ -14,6 +14,7 @@ export interface Product {
   category: Category;
   price: number; // FCFA
   inStock: boolean;
+  stockQty?: number;
   imageUrl?: string | null;
   imagePath?: string | null;
   signature?: boolean;

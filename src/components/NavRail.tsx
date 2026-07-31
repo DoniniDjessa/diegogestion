@@ -7,10 +7,13 @@ import {
   ChefHat,
   ClipboardList,
   LogOut,
+  Package,
   Settings,
   ShoppingBasket,
   Sofa,
+  Truck,
   UtensilsCrossed,
+  Wallet,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { fetchCurrentRole, type UserRole } from "@/lib/auth";
@@ -29,6 +32,12 @@ const ITEMS = [
     roles: ["superAdmin", "admin", "caissier"] as const,
   },
   {
+    href: "/stock",
+    label: "Stock",
+    icon: Package,
+    roles: ["superAdmin", "admin", "caissier"] as const,
+  },
+  {
     href: "/salle",
     label: "Salle",
     icon: Sofa,
@@ -39,6 +48,18 @@ const ITEMS = [
     label: "Commandes",
     icon: ClipboardList,
     roles: ["superAdmin", "admin", "caissier"] as const,
+  },
+  {
+    href: "/livraisons",
+    label: "Livraisons",
+    icon: Truck,
+    roles: ["superAdmin", "admin", "caissier"] as const,
+  },
+  {
+    href: "/finances",
+    label: "Finances",
+    icon: Wallet,
+    roles: ["superAdmin", "admin"] as const,
   },
   {
     href: "/parametres",

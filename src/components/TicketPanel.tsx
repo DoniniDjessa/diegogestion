@@ -161,11 +161,16 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
       void loadHistory();
       onCheckout?.();
     } catch (cause) {
-      setError(
+      const message =
         cause instanceof Error
           ? cause.message
-          : "Commande refusée. Connectez-vous avec un compte staff."
-      );
+          : typeof cause === "object" &&
+              cause !== null &&
+              "message" in cause &&
+              typeof (cause as { message: unknown }).message === "string"
+            ? (cause as { message: string }).message
+            : "Commande refusée. Connectez-vous avec un compte staff.";
+      setError(message);
     } finally {
       setSubmitting(false);
     }

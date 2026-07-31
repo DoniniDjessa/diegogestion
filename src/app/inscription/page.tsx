@@ -2,6 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { LoaderCircle, ShieldCheck, UserPlus, Users, X } from "lucide-react";
+import { ListPagination } from "@/components/ListPagination";
 import { getSupabase } from "@/lib/supabase";
 import {
   fetchCurrentRole,
@@ -24,9 +25,12 @@ type DiegoUser = {
   active: boolean;
 };
 
+const USERS_PAGE_SIZE = 12;
+
 export default function InscriptionPage() {
   const [currentRole, setCurrentRole] = useState<UserRole | null>(null);
   const [users, setUsers] = useState<DiegoUser[]>([]);
+  const [userPage, setUserPage] = useState(1);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -123,6 +127,16 @@ export default function InscriptionPage() {
       ? USER_ROLES
       : USER_ROLES.filter((item) => item !== "superAdmin");
 
+  const userPageCount = Math.max(1, Math.ceil(users.length / USERS_PAGE_SIZE));
+  const displayedUsers = users.slice(
+    (userPage - 1) * USERS_PAGE_SIZE,
+    userPage * USERS_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    if (userPage > userPageCount) setUserPage(userPageCount);
+  }, [userPage, userPageCount]);
+
   return (
     <main className="relative h-full overflow-y-auto bg-surface-muted p-4 sm:p-6">
       <div className="mx-auto w-full max-w-5xl">
@@ -150,7 +164,7 @@ export default function InscriptionPage() {
             </button>
           </header>
           <div className="divide-y divide-line">
-            {users.map((item) => (
+            {displayedUsers.map((item) => (
               <div
                 key={item.id}
                 className="flex items-center justify-between gap-3 px-5 py-3"
@@ -178,6 +192,15 @@ export default function InscriptionPage() {
               </p>
             )}
           </div>
+          <ListPagination
+            page={userPage}
+            pageCount={userPageCount}
+            totalItems={users.length}
+            itemLabel="utilisateur"
+            onPageChange={setUserPage}
+            className="border-t border-line p-4"
+            ariaLabel="Pagination des utilisateurs"
+          />
         </section>
       </div>
 

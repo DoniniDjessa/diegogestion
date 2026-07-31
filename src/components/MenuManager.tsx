@@ -1,11 +1,19 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { ImagePlus, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import {
+  ImagePlus,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { formatFCFA } from "@/lib/data";
 import type { Category, Product } from "@/lib/types";
 import { FIXED_CATEGORIES, categoryLabel } from "@/lib/categories";
 import { FoodImage } from "@/components/FoodImage";
+import { ListPagination } from "@/components/ListPagination";
 import {
   createProduct,
   deleteProduct,
@@ -38,10 +46,13 @@ const EMPTY_FORM: ProductForm = {
   imagePath: null,
 };
 
+const MENU_PAGE_SIZE = 12;
+
 export default function MenuManager() {
   const [products, setProducts] = useState<Product[]>([]);
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Product | null>(null);
   const [form, setForm] = useState<ProductForm>(EMPTY_FORM);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -76,6 +87,21 @@ export default function MenuManager() {
       ),
     [products, category, query]
   );
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / MENU_PAGE_SIZE));
+
+  const displayed = useMemo(() => {
+    const start = (page - 1) * MENU_PAGE_SIZE;
+    return filtered.slice(start, start + MENU_PAGE_SIZE);
+  }, [filtered, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [category, query]);
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
 
   function openCreate() {
     setEditing(null);
@@ -242,7 +268,7 @@ export default function MenuManager() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {filtered.map((product) => (
+              {displayed.map((product) => (
                 <tr
                   key={product.id}
                   className={product.inStock ? "" : "bg-red-50/40"}
@@ -307,6 +333,17 @@ export default function MenuManager() {
             </p>
           )}
         </div>
+        {filtered.length > 0 && (
+          <ListPagination
+            page={page}
+            pageCount={pageCount}
+            totalItems={filtered.length}
+            itemLabel="produit"
+            onPageChange={setPage}
+            className="mt-3"
+            ariaLabel="Pagination du menu"
+          />
+        )}
       </div>
 
       {formOpen && (

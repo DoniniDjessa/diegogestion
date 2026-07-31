@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useEffect, useState } from "react";
-import { LoaderCircle, LogIn, LogOut } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle, LogIn, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
@@ -19,6 +19,7 @@ export default function ConnexionPage() {
   const [role, setRole] = useState<UserRole | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -167,14 +168,28 @@ export default function ConnexionPage() {
               <span className="mb-1 block text-xs font-semibold">
                 Mot de passe
               </span>
-              <input
-                required
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="w-full rounded-card border border-line px-3 py-2.5 text-sm outline-none focus:border-brand-400"
-              />
+              <div className="relative">
+                <input
+                  required
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="w-full rounded-card border border-line px-3 py-2.5 pr-11 text-sm outline-none focus:border-brand-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={
+                    showPassword
+                      ? "Masquer le mot de passe"
+                      : "Afficher le mot de passe"
+                  }
+                  className="absolute inset-y-0 right-0 flex min-w-11 items-center justify-center px-3 text-ink-soft touch-manipulation"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </label>
             <button className="w-full rounded-full bg-brand-500 py-3 text-ink hover:bg-brand-600">
               Se connecter

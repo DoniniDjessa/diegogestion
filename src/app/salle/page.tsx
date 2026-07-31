@@ -2,6 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import {
+  Banknote,
   ChevronRight,
   Download,
   ExternalLink,
@@ -17,17 +18,22 @@ import {
 } from "lucide-react";
 import QRCode from "qrcode";
 import { useRouter } from "next/navigation";
-import type { RestaurantTable, TableStatus } from "@/lib/types";
+import type { Order, RestaurantTable, TableStatus } from "@/lib/types";
 import { useCart } from "@/lib/store";
+import { formatFCFA } from "@/lib/data";
+import { orderCode } from "@/lib/order-code";
 import {
   createRestaurantTable,
   deleteRestaurantTable,
+  fetchAllOrders,
   fetchRestaurantTables,
   removeRealtimeChannel,
+  setOrderPaymentStatus,
   setRestaurantTableStatus,
   subscribeToRestaurantChanges,
   updateRestaurantTable,
 } from "@/lib/supabase/repository";
+import { usePosKeyboardReceiver } from "@/lib/pos-keyboard";
 
 const STATUS_META: Record<
   TableStatus,
@@ -72,7 +78,16 @@ export default function SallePage() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [payingId, setPayingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [tableQuery, setTableQuery] = useState("");
+
+  usePosKeyboardReceiver({
+    route: "salle",
+    onQuery: setTableQuery,
+    getQuery: () => tableQuery,
+  });
 
   const loadTables = useCallback(async () => {
     try {
@@ -86,15 +101,57 @@ export default function SallePage() {
     }
   }, []);
 
+  const loadPendingOrders = useCallback(async () => {
+    try {
+      const all = await fetchAllOrders();
+      setPendingOrders(
+        all.filter(
+          (order) =>
+            order.paymentStatus === "en_attente" &&
+            order.status !== "annule" &&
+            Boolean(order.restaurantTableId)
+        )
+      );
+    } catch {
+      setPendingOrders([]);
+    }
+  }, []);
+
   useEffect(() => {
     void loadTables();
-    const channel = subscribeToRestaurantChanges(() => void loadTables());
+    void loadPendingOrders();
+    const channel = subscribeToRestaurantChanges(() => {
+      void loadTables();
+      void loadPendingOrders();
+    });
     return () => {
       void removeRealtimeChannel(channel);
     };
-  }, [loadTables]);
+  }, [loadPendingOrders, loadTables]);
 
   const selected = tables.find((table) => table.id === selectedId) ?? null;
+  const selectedPending = pendingOrders.filter(
+    (order) => order.restaurantTableId === selectedId
+  );
+  const visibleTables = tables.filter((table) =>
+    table.label.toLowerCase().includes(tableQuery.trim().toLowerCase())
+  );
+
+  async function markTableOrderPaid(order: Order) {
+    if (payingId) return;
+    setPayingId(order.id);
+    try {
+      await setOrderPaymentStatus(order.id, "paye");
+      await loadPendingOrders();
+      setError(null);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Paiement non enregistré."
+      );
+    } finally {
+      setPayingId(null);
+    }
+  }
 
   const tableUrl = useCallback(
     (table: RestaurantTable) =>
@@ -268,6 +325,16 @@ export default function SallePage() {
       )}
 
       <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+        <label className="mb-3 block">
+          <span className="sr-only">Rechercher une table</span>
+          <input
+            type="search"
+            value={tableQuery}
+            onChange={(event) => setTableQuery(event.target.value)}
+            placeholder="Rechercher une table…"
+            className="w-full rounded-full border border-line bg-white px-4 py-2.5 text-sm outline-none focus:border-brand-400"
+          />
+        </label>
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {STATUSES.map((status) => {
             const meta = STATUS_META[status];
@@ -300,21 +367,31 @@ export default function SallePage() {
             <div className="flex justify-center py-14">
               <LoaderCircle size={22} className="animate-spin text-brand-500" />
             </div>
-          ) : tables.length === 0 ? (
+          ) : visibleTables.length === 0 ? (
             <p className="py-14 text-center text-xs text-ink-faint">
               Aucune table disponible.
             </p>
           ) : (
             <div className="divide-y divide-line">
-              {tables.map((table) => {
+              {visibleTables.map((table) => {
                 const meta = STATUS_META[table.status];
+                const unpaidCount = pendingOrders.filter(
+                  (order) => order.restaurantTableId === table.id
+                ).length;
                 return (
               <button
                     key={table.id}
                     onClick={() => setSelectedId(table.id)}
                     className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-brand-50/50 sm:grid-cols-[1fr_120px_130px_auto]"
               >
-                    <span className="font-bold">{table.label}</span>
+                    <span className="flex items-center gap-2 font-bold">
+                      {table.label}
+                      {unpaidCount > 0 && (
+                        <span className="rounded-full bg-amber-500 px-2 py-0.5 font-amount text-[10px] font-bold text-white">
+                          {unpaidCount} à payer
+                        </span>
+                      )}
+                    </span>
                     <span className="hidden items-center gap-1 text-xs text-ink-soft sm:flex">
                       <Users size={13} /> {table.seats}
                     </span>
@@ -378,6 +455,62 @@ export default function SallePage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="mt-6 rounded-card border border-amber-200 bg-amber-50/50 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Banknote size={16} className="text-amber-700" />
+                  <div>
+                    <p className="text-xs font-bold">À encaisser</p>
+                    <p className="text-2xs text-ink-faint">
+                      Commandes de {selected.label} en attente de paiement
+                    </p>
+                  </div>
+                </div>
+                {selectedPending.length === 0 ? (
+                  <p className="text-2xs text-ink-faint">
+                    Aucune vente en attente pour cette table.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {selectedPending.map((order) => (
+                      <li
+                        key={order.id}
+                        className="rounded-xl border border-amber-200 bg-white px-3 py-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold">
+                              #{orderCode(order.number, order.createdAt)}
+                            </p>
+                            <p className="text-2xs text-ink-faint">
+                              {order.lines
+                                .slice(0, 2)
+                                .map(
+                                  (line) => `${line.qty}× ${line.product.name}`
+                                )
+                                .join(", ")}
+                              {order.lines.length > 2 ? "…" : ""}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <span className="font-amount text-xs font-bold tabular-nums text-brand-700">
+                              {formatFCFA(order.total)}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={payingId === order.id}
+                              onClick={() => void markTableOrderPaid(order)}
+                              className="rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
+                            >
+                              {payingId === order.id ? "…" : "Marquer payé"}
+                            </button>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               <div className="mt-6 rounded-card border border-line p-4 text-center">

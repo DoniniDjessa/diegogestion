@@ -11,7 +11,7 @@ import {
   type UserRole,
 } from "@/lib/auth";
 
-const PUBLIC_ROUTES = ["/connexion", "/affichage"];
+const PUBLIC_ROUTES = ["/connexion", "/affichage", "/clavier"];
 
 function canOpenPath(role: UserRole | null, pathname: string): boolean {
   if (role === "superAdmin" || role === "admin") return true;

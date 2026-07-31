@@ -15,6 +15,7 @@ import {
   fetchExpenses,
   type Expense,
 } from "@/lib/supabase/repository";
+import { usePosKeyboardReceiver } from "@/lib/pos-keyboard";
 
 type FinanceTab = "revenus" | "depenses";
 type DateFilter = "today" | "week" | "month" | "all" | "range";
@@ -131,6 +132,14 @@ export default function FinancesPage() {
   const [revenueQuery, setRevenueQuery] = useState("");
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState("all");
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+
+  usePosKeyboardReceiver({
+    route: "finances",
+    onQuery: setRevenueQuery,
+    onAmount: (next) => setAmount(String(next || "")),
+    getQuery: () => revenueQuery,
+    getAmount: () => Number.parseInt(amount.replace(/\s/g, ""), 10) || 0,
+  });
 
   const load = useCallback(async () => {
     setError(null);

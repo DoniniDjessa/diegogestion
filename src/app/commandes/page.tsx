@@ -39,6 +39,7 @@ import {
 } from "@/lib/supabase/repository";
 import { printOrderReceipt } from "@/lib/receipt";
 import { orderCode } from "@/lib/order-code";
+import { usePosKeyboardReceiver } from "@/lib/pos-keyboard";
 
 const LIVE_ORDER_WINDOW_MS = 2 * 60 * 60 * 1000;
 
@@ -167,6 +168,12 @@ export default function CommandesPage() {
   const [addProductId, setAddProductId] = useState("");
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState<string | null>(null);
+
+  usePosKeyboardReceiver({
+    route: "commandes",
+    onQuery: setHistoryQuery,
+    getQuery: () => historyQuery,
+  });
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 

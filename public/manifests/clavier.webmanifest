@@ -1,0 +1,27 @@
+{
+  "id": "/clavier?pwa=diego-clavier",
+  "name": "Diego Clavier caisse",
+  "short_name": "Clavier",
+  "description": "Clavier et pavé numérique pour la caisse Diego.",
+  "start_url": "/clavier",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#f7f3e8",
+  "theme_color": "#c2a24c",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/diego.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/diego.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

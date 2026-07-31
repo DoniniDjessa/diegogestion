@@ -25,6 +25,7 @@ import {
   updateProduct,
   uploadProductImage,
 } from "@/lib/supabase/repository";
+import { usePosKeyboardReceiver } from "@/lib/pos-keyboard";
 
 type ProductForm = {
   name: string;
@@ -59,6 +60,12 @@ export default function MenuManager() {
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  usePosKeyboardReceiver({
+    route: "menu",
+    onQuery: setQuery,
+    getQuery: () => query,
+  });
 
   const loadData = useCallback(async () => {
     try {

@@ -105,7 +105,12 @@ export function NavRail() {
     };
   }, []);
 
-  if (pathname === "/affichage" || pathname === "/connexion") return null;
+  if (
+    pathname === "/affichage" ||
+    pathname === "/clavier" ||
+    pathname === "/connexion"
+  )
+    return null;
 
   const visibleItems = ITEMS.filter(
     (item) =>

@@ -9,6 +9,10 @@ export const metadata: Metadata = {
     title: "Clavier",
     statusBarStyle: "default",
   },
+  icons: {
+    icon: "/ky.jpg",
+    apple: "/ky.jpg",
+  },
 };
 
 export const viewport: Viewport = {

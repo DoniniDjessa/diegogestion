@@ -66,6 +66,7 @@ const WEBSITE_URL =
 export default function SallePage() {
   const router = useRouter();
   const setRestaurantTableId = useCart((s) => s.setRestaurantTableId);
+  const loadForEdit = useCart((s) => s.loadForEdit);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [qrPreview, setQrPreview] = useState<string | null>(null);
@@ -217,6 +218,12 @@ export default function SallePage() {
 
   function startOrder(table: RestaurantTable) {
     setRestaurantTableId(table.id);
+    setSelectedId(null);
+    router.push("/caisse");
+  }
+
+  function editPendingOrder(order: Order) {
+    loadForEdit(order);
     setSelectedId(null);
     router.push("/caisse");
   }
@@ -497,14 +504,23 @@ export default function SallePage() {
                             <span className="font-amount text-xs font-bold tabular-nums text-brand-700">
                               {formatFCFA(order.total)}
                             </span>
-                            <button
-                              type="button"
-                              disabled={payingId === order.id}
-                              onClick={() => void markTableOrderPaid(order)}
-                              className="rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
-                            >
-                              {payingId === order.id ? "…" : "Marquer payé"}
-                            </button>
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => editPendingOrder(order)}
+                                className="rounded-full border border-line bg-white px-2.5 py-1 text-[10px] font-semibold text-ink-soft hover:bg-surface-soft"
+                              >
+                                Modifier
+                              </button>
+                              <button
+                                type="button"
+                                disabled={payingId === order.id}
+                                onClick={() => void markTableOrderPaid(order)}
+                                className="rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
+                              >
+                                {payingId === order.id ? "…" : "Marquer payé"}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </li>

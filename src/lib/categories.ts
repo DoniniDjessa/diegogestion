@@ -13,15 +13,17 @@ export const FIXED_CATEGORIES: MenuCategory[] = [
   { id: "accompagnements", slug: "accompagnements", label: "Accompagnements", sortOrder: 40 },
   { id: "cocktails", slug: "cocktails", label: "Cocktails", sortOrder: 50 },
   { id: "vins", slug: "vins", label: "Vins", sortOrder: 60 },
+  { id: "champagnes", slug: "champagnes", label: "Champagnes", sortOrder: 65 },
   { id: "spiritueux-bieres", slug: "spiritueux-bieres", label: "Spiritueux & Bières", sortOrder: 70 },
   { id: "softs-jus", slug: "softs-jus", label: "Softs & Jus", sortOrder: 80 },
   { id: "boissons-chaudes", slug: "boissons-chaudes", label: "Boissons Chaudes", sortOrder: 90 },
 ];
 
-/** Catégories boissons uniquement (pas de plats / accompagnements). */
+/** Catégories boissons — exclues du flux cuisine. */
 export const DRINK_CATEGORY_SLUGS = [
   "cocktails",
   "vins",
+  "champagnes",
   "spiritueux-bieres",
   "softs-jus",
   "boissons-chaudes",
@@ -35,6 +37,11 @@ export const DRINK_CATEGORIES: MenuCategory[] = FIXED_CATEGORIES.filter((item) =
 
 export function isDrinkCategory(slug: string): boolean {
   return (DRINK_CATEGORY_SLUGS as readonly string[]).includes(slug);
+}
+
+/** Plats / accompagnements — tout ce qui n'est pas une boisson. */
+export function isFoodCategory(slug: string): boolean {
+  return !isDrinkCategory(slug);
 }
 
 export function categoryLabel(slug: string): string {

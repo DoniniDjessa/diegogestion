@@ -61,31 +61,22 @@ export default function ClavierPage() {
   const pressLetter = useCallback(
     (ch: string) => {
       setTarget("query");
-      setLocalQuery((q) => {
-        const next = (q + ch).slice(0, 64);
-        send({ target: "query", action: "set", value: next });
-        return next;
-      });
+      setLocalQuery((q) => (q + ch).slice(0, 64));
+      send({ target: "query", action: "append", value: ch });
     },
     [send]
   );
 
   const pressSpace = useCallback(() => {
     setTarget("query");
-    setLocalQuery((q) => {
-      const next = `${q} `;
-      send({ target: "query", action: "set", value: next });
-      return next;
-    });
+    setLocalQuery((q) => `${q} `);
+    send({ target: "query", action: "space" });
   }, [send]);
 
   const backspaceQuery = useCallback(() => {
     setTarget("query");
-    setLocalQuery((q) => {
-      const next = q.slice(0, -1);
-      send({ target: "query", action: "set", value: next });
-      return next;
-    });
+    setLocalQuery((q) => q.slice(0, -1));
+    send({ target: "query", action: "backspace" });
   }, [send]);
 
   const clearQuery = useCallback(() => {
@@ -99,21 +90,17 @@ export default function ClavierPage() {
       setTarget("amount");
       setLocalAmountDigits((prev) => {
         const base = prev === "0" ? "" : prev;
-        const next = `${base}${digit}`.slice(0, 9) || "0";
-        send({ target: "amount", action: "set", value: Number(next) });
-        return next;
+        return `${base}${digit}`.slice(0, 9) || "0";
       });
+      send({ target: "amount", action: "digit", value: digit });
     },
     [send]
   );
 
   const backspaceAmount = useCallback(() => {
     setTarget("amount");
-    setLocalAmountDigits((prev) => {
-      const next = prev.slice(0, -1) || "0";
-      send({ target: "amount", action: "set", value: Number(next) });
-      return next;
-    });
+    setLocalAmountDigits((prev) => prev.slice(0, -1) || "0");
+    send({ target: "amount", action: "backspace" });
   }, [send]);
 
   const clearAmount = useCallback(() => {
@@ -144,21 +131,20 @@ export default function ClavierPage() {
       <header className="relative z-10 flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2.5">
           <Image
-            src="/diego.png"
-            alt="Chez Diego"
-            width={88}
+            src="/ky.jpg"
+            alt="Clavier Diego"
+            width={44}
             height={44}
             priority
-            className="h-8 w-auto object-contain"
+            className="h-10 w-10 rounded-lg object-contain"
           />
           <div>
             <p className="font-button text-[10px] uppercase tracking-[0.2em] text-brand-600">
               Clavier caisse
             </p>
             <p className="text-[11px] text-ink-soft">
-              {connected ? "Synchronisé" : "En attente de la caisse…"}
+              Touchez un champ sur l&apos;app, puis tapez ici
               {" · "}
-              Saisie →{" "}
               <span className="font-semibold text-ink">
                 {focusRoute
                   ? KEYBOARD_ROUTE_LABELS[focusRoute]

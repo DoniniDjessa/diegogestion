@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCheck, Clock, X } from "lucide-react";
 import { CHANNEL_META } from "@/lib/data";
-import type { Order, OrderStatus } from "@/lib/types";
+import { isFoodCategory } from "@/lib/categories";
+import type { Order, OrderLine, OrderStatus } from "@/lib/types";
 import {
   fetchOrders,
   removeRealtimeChannel,
@@ -16,6 +17,14 @@ const COLUMNS: { id: "en_attente" | "pret"; label: string; accent: string }[] =
     { id: "en_attente", label: "En attente", accent: "border-t-amber-400" },
     { id: "pret", label: "Prêt", accent: "border-t-emerald-400" },
   ];
+
+function foodLines(order: Order): OrderLine[] {
+  return order.lines.filter((line) => isFoodCategory(line.product.category));
+}
+
+function hasKitchenFood(order: Order): boolean {
+  return foodLines(order).length > 0;
+}
 
 function ElapsedTime({ since }: { since: string }) {
   const [now, setNow] = useState(() => Date.now());
@@ -71,6 +80,11 @@ export default function CuisinePage() {
     };
   }, [loadOrders]);
 
+  const kitchenOrders = useMemo(
+    () => orders.filter(hasKitchenFood),
+    [orders]
+  );
+
   async function setStatus(id: string, next: OrderStatus) {
     setOrders((prev) =>
       prev
@@ -89,16 +103,21 @@ export default function CuisinePage() {
     }
   }
 
-  const activeCount = orders.filter((o) =>
+  const activeCount = kitchenOrders.filter((o) =>
     ["en_attente", "preparation", "pret"].includes(o.status)
   ).length;
 
   return (
     <div className="ops-readable flex h-full flex-col">
       <header className="flex items-center justify-between border-b border-line bg-surface px-4 py-3">
-        <h1 className="font-display text-xl font-bold tracking-tight text-ink">
-          Cuisine
-        </h1>
+        <div>
+          <h1 className="font-display text-xl font-bold tracking-tight text-ink">
+            Cuisine
+          </h1>
+          <p className="text-2xs text-ink-faint">
+            Plats uniquement — boissons exclues
+          </p>
+        </div>
         <span className="font-amount text-sm font-medium tabular-nums text-ink-soft">
           {activeCount} commande{activeCount > 1 ? "s" : ""} active
           {activeCount > 1 ? "s" : ""}
@@ -113,7 +132,7 @@ export default function CuisinePage() {
 
       <div className="grid flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 md:grid-cols-2 md:overflow-hidden">
         {COLUMNS.map((col) => {
-          const items = columnOrders(orders, col.id);
+          const items = columnOrders(kitchenOrders, col.id);
           return (
             <div
               key={col.id}
@@ -130,6 +149,7 @@ export default function CuisinePage() {
               <div className="flex-1 space-y-2.5 overflow-y-auto px-2.5 pb-2.5">
                 {items.map((o) => {
                   const meta = CHANNEL_META[o.channel];
+                  const lines = foodLines(o);
                   return (
                     <article
                       key={o.id}
@@ -150,7 +170,7 @@ export default function CuisinePage() {
                         <ElapsedTime since={o.createdAt} />
                       </div>
                       <ul className="mb-2.5 space-y-1.5">
-                        {o.lines.map((l, i) => (
+                        {lines.map((l, i) => (
                           <li
                             key={i}
                             className="flex gap-2 text-[15px] leading-snug text-ink"

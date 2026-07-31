@@ -7,6 +7,7 @@ import {
   History,
   MapPin,
   Minus,
+  Pencil,
   Phone,
   Plus,
   Printer,
@@ -21,10 +22,24 @@ import {
   createPosOrder,
   fetchAllOrders,
   fetchRestaurantTables,
+  replaceUnpaidPosOrderItems,
   setOrderPaymentStatus,
 } from "@/lib/supabase/repository";
 import { printOrderReceipt } from "@/lib/receipt";
 import { orderCode } from "@/lib/order-code";
+
+function parseDeliveryNote(note: string | undefined): {
+  phone: string;
+  location: string;
+} {
+  if (!note) return { phone: "", location: "" };
+  const phoneMatch = note.match(/Tél:\s*([^—\-]+)/i);
+  const locationMatch = note.match(/Lieu:\s*(.+)$/i);
+  return {
+    phone: phoneMatch?.[1]?.trim() ?? "",
+    location: locationMatch?.[1]?.trim() ?? "",
+  };
+}
 
 const CHANNELS: OrderChannel[] = ["table", "livraison"];
 
@@ -48,12 +63,15 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
     payment,
     restaurantTableId,
     amountReceived,
+    editingOrderId,
+    editingOrderNumber,
     setQty,
     remove,
     setChannel,
     setPayment,
     setRestaurantTableId,
     setAmountReceived,
+    loadForEdit,
     clear,
   } = useCart();
   const total = cartTotal(lines);
@@ -68,6 +86,7 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
   const [deliveryPhone, setDeliveryPhone] = useState("");
   const [deliveryLocation, setDeliveryLocation] = useState("");
+  const isEditing = Boolean(editingOrderId);
 
   useEffect(() => {
     void fetchRestaurantTables()
@@ -143,16 +162,51 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
         channel === "livraison"
           ? `Livraison — Tél: ${deliveryPhone.trim()} — Lieu: ${deliveryLocation.trim()}`
           : undefined;
+      const items = lines.map(({ product, qty }) => ({
+        productId: product.id,
+        quantity: qty,
+      }));
+
+      if (editingOrderId) {
+        const savedTotal = await replaceUnpaidPosOrderItems({
+          orderId: editingOrderId,
+          items,
+          note: channel === "livraison" ? deliveryNote : "",
+          payment,
+          restaurantTableId,
+          channel,
+        });
+        const tableLabel = tables.find((t) => t.id === restaurantTableId)?.label;
+        setCreatedOrder({
+          id: editingOrderId,
+          number: editingOrderNumber ?? 0,
+          channel,
+          status: "en_attente",
+          lines: lines.map(({ product, qty }) => ({ product, qty })),
+          createdAt: new Date().toISOString(),
+          table: tableLabel,
+          restaurantTableId: restaurantTableId ?? undefined,
+          note: deliveryNote,
+          paymentMethod: payment,
+          paymentStatus: "en_attente",
+          total: savedTotal,
+        });
+        clear();
+        setDeliveryPhone("");
+        setDeliveryLocation("");
+        setTab("attente");
+        void loadOrders();
+        onCheckout?.();
+        return;
+      }
+
       const tableLabel = tables.find((t) => t.id === restaurantTableId)?.label;
       const order = await createPosOrder({
         channel,
         payment,
         restaurantTableId: restaurantTableId ?? undefined,
         note: deliveryNote,
-        items: lines.map(({ product, qty }) => ({
-          productId: product.id,
-          quantity: qty,
-        })),
+        items,
       });
 
       setCreatedOrder({
@@ -189,6 +243,25 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function startEdit(order: Order) {
+    if (order.paymentStatus !== "en_attente" || order.status === "annule") {
+      setError("Cette vente ne peut plus être modifiée.");
+      return;
+    }
+    loadForEdit(order);
+    if (order.channel === "livraison") {
+      const parsed = parseDeliveryNote(order.note);
+      setDeliveryPhone(parsed.phone);
+      setDeliveryLocation(parsed.location);
+    } else {
+      setDeliveryPhone("");
+      setDeliveryLocation("");
+    }
+    setCreatedOrder(null);
+    setError(null);
+    setTab("commander");
   }
 
   function printOrder(order: Order) {
@@ -300,22 +373,31 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h2 className="font-display text-base font-bold text-white">
-                  Nouvelle commande
+                  {isEditing
+                    ? `Modifier #${editingOrderNumber ?? ""}`
+                    : "Nouvelle commande"}
                 </h2>
                 <p className="mt-0.5 text-2xs text-white/80">
-                  {new Date().toLocaleDateString("fr-FR", {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short",
-                  })}
+                  {isEditing
+                    ? "Ajoutez ou retirez des articles, puis enregistrez"
+                    : new Date().toLocaleDateString("fr-FR", {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                      })}
                 </p>
               </div>
-              {lines.length > 0 && (
+              {(lines.length > 0 || isEditing) && (
                 <button
-                  onClick={clear}
+                  onClick={() => {
+                    clear();
+                    setDeliveryPhone("");
+                    setDeliveryLocation("");
+                    setError(null);
+                  }}
                   className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-1 text-white hover:bg-white/25"
                 >
-                  <Trash2 size={11} /> Vider
+                  <Trash2 size={11} /> {isEditing ? "Annuler" : "Vider"}
                 </button>
               )}
             </div>
@@ -505,8 +587,12 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
               className="w-full rounded-full bg-emerald-500 py-3 text-white shadow-card transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-ink-faint/30"
             >
               {submitting
-                ? "Envoi…"
-                : `Commander ${total > 0 ? formatFCFA(total) : ""}`}
+                ? isEditing
+                  ? "Enregistrement…"
+                  : "Envoi…"
+                : isEditing
+                  ? `Enregistrer ${total > 0 ? formatFCFA(total) : ""}`
+                  : `Commander ${total > 0 ? formatFCFA(total) : ""}`}
             </button>
           </div>
         </>
@@ -519,7 +605,7 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
               En attente
             </h2>
             <p className="mt-0.5 text-2xs text-white/80">
-              Ventes à encaisser — avec ou sans table
+              Modifier, encaisser — avec ou sans table
             </p>
           </div>
           <div className="flex-1 overflow-y-auto p-3">
@@ -571,6 +657,14 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
                           {formatFCFA(order.total)}
                         </span>
                         <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(order)}
+                            className="flex items-center gap-1 rounded-full border border-line bg-white px-2 py-1 text-ink-soft hover:bg-surface-soft"
+                            title="Modifier"
+                          >
+                            <Pencil size={11} />
+                          </button>
                           <button
                             type="button"
                             onClick={() => printOrder(order)}

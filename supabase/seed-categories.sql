@@ -12,6 +12,7 @@ values
   ('accompagnements',    'Accompagnements',     40, true),
   ('cocktails',          'Cocktails',           50, true),
   ('vins',               'Vins',                60, true),
+  ('champagnes',         'Champagnes',          65, true),
   ('spiritueux-bieres',  'Spiritueux & Bières', 70, true),
   ('softs-jus',          'Softs & Jus',         80, true),
   ('boissons-chaudes',   'Boissons Chaudes',    90, true)

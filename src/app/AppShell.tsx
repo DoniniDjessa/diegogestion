@@ -4,11 +4,13 @@ import { usePathname } from "next/navigation";
 import { NavRail } from "@/components/NavRail";
 import { AuthGate } from "@/components/AuthGate";
 import { PwaRegister } from "@/components/PwaRegister";
+import { usePosKeyboardDomBridge } from "@/lib/pos-keyboard";
 
 const FULLSCREEN_ROUTES = ["/affichage", "/clavier", "/connexion"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  usePosKeyboardDomBridge();
   const fullscreen = FULLSCREEN_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );

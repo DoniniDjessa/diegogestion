@@ -19,6 +19,7 @@ import { CHANNEL_META, formatFCFA } from "@/lib/data";
 import { cartChange, cartTotal, useCart } from "@/lib/store";
 import type { Order, OrderChannel, PaymentMethod, RestaurantTable } from "@/lib/types";
 import {
+  cancelOrder,
   createPosOrder,
   fetchAllOrders,
   fetchRestaurantTables,
@@ -81,6 +82,7 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
@@ -276,7 +278,7 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
   }
 
   async function markPaid(order: Order) {
-    if (payingId) return;
+    if (payingId || deletingId) return;
     setPayingId(order.id);
     setError(null);
     try {
@@ -290,6 +292,35 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
       );
     } finally {
       setPayingId(null);
+    }
+  }
+
+  async function deletePending(order: Order) {
+    if (payingId || deletingId) return;
+    if (
+      !window.confirm(
+        `Supprimer la vente #${orderCode(order.number, order.createdAt)} ?`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(order.id);
+    setError(null);
+    try {
+      await cancelOrder(order.id);
+      if (editingOrderId === order.id) {
+        clear();
+        setDeliveryPhone("");
+        setDeliveryLocation("");
+      }
+      if (createdOrder?.id === order.id) setCreatedOrder(null);
+      await loadOrders();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Suppression impossible."
+      );
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -669,12 +700,22 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
                             type="button"
                             onClick={() => printOrder(order)}
                             className="flex items-center gap-1 rounded-full border border-line bg-white px-2 py-1 text-ink-soft hover:bg-surface-soft"
+                            title="Imprimer"
                           >
                             <Printer size={11} />
                           </button>
                           <button
                             type="button"
-                            disabled={payingId === order.id}
+                            disabled={deletingId === order.id || payingId === order.id}
+                            onClick={() => void deletePending(order)}
+                            className="flex items-center gap-1 rounded-full border border-red-200 bg-white px-2 py-1 text-red-500 hover:bg-red-50 disabled:opacity-60"
+                            title="Supprimer"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={payingId === order.id || deletingId === order.id}
                             onClick={() => void markPaid(order)}
                             className="rounded-full bg-emerald-500 px-2.5 py-1 text-[9px] font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
                           >

@@ -10,6 +10,7 @@ import {
   Package,
   Settings,
   ShoppingBasket,
+  Smartphone,
   Sofa,
   Truck,
   UtensilsCrossed,
@@ -19,6 +20,12 @@ import { getSupabase } from "@/lib/supabase";
 import { fetchCurrentRole, type UserRole } from "@/lib/auth";
 
 const ITEMS = [
+  {
+    href: "/recap",
+    label: "Récap",
+    icon: Smartphone,
+    roles: ["superAdmin", "admin"] as const,
+  },
   {
     href: "/caisse",
     label: "Caisse",
@@ -105,7 +112,13 @@ export function NavRail() {
     };
   }, []);
 
-  if (pathname === "/affichage" || pathname === "/connexion") return null;
+  if (
+    pathname === "/affichage" ||
+    pathname === "/connexion" ||
+    pathname.startsWith("/recap")
+  ) {
+    return null;
+  }
 
   const visibleItems = ITEMS.filter(
     (item) =>

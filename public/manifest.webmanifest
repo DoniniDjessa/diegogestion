@@ -1,0 +1,32 @@
+{
+  "name": "Diego Récap",
+  "short_name": "Récap",
+  "description": "Récapitulatif mobile — menu, commandes et revenus Diego.",
+  "start_url": "/recap",
+  "scope": "/recap",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fffdf6",
+  "theme_color": "#c2a24c",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/icons/recap-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/recap-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/recap-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

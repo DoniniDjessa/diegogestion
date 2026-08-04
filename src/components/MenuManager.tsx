@@ -2,12 +2,14 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  CheckCircle2,
   ImagePlus,
   Pencil,
   Plus,
   Search,
   Trash2,
   X,
+  XCircle,
 } from "lucide-react";
 import { formatFCFA } from "@/lib/data";
 import type { Category, Product } from "@/lib/types";
@@ -48,7 +50,11 @@ const EMPTY_FORM: ProductForm = {
 
 const MENU_PAGE_SIZE = 12;
 
-export default function MenuManager() {
+export default function MenuManager({
+  readOnly = false,
+}: {
+  readOnly?: boolean;
+}) {
   const [products, setProducts] = useState<Product[]>([]);
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
@@ -200,7 +206,7 @@ export default function MenuManager() {
       <header className="px-3 pt-3 sm:px-4">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="mr-2 font-display text-base font-bold">
-            Menu & stocks
+            {readOnly ? "Menu" : "Menu & stocks"}
           </h1>
           <div className="relative min-w-40 flex-1 sm:max-w-xs">
             <Search
@@ -219,12 +225,14 @@ export default function MenuManager() {
               {outOfStock} rupture{outOfStock > 1 ? "s" : ""}
             </span>
           )}
-          <button
-            onClick={openCreate}
-            className="ml-auto flex items-center gap-1.5 rounded-full bg-brand-500 px-4 py-2 text-ink shadow-card hover:bg-brand-600"
-          >
-            <Plus size={13} /> Nouveau produit
-          </button>
+          {!readOnly && (
+            <button
+              onClick={openCreate}
+              className="ml-auto flex items-center gap-1.5 rounded-full bg-brand-500 px-4 py-2 text-ink shadow-card hover:bg-brand-600"
+            >
+              <Plus size={13} /> Nouveau produit
+            </button>
+          )}
         </div>
         <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
           {[
@@ -264,7 +272,9 @@ export default function MenuManager() {
                 <th className="px-3 py-2 text-right font-medium">
                   Disponibilité
                 </th>
-                <th className="px-3 py-2 text-right font-medium">Actions</th>
+                {!readOnly && (
+                  <th className="px-3 py-2 text-right font-medium">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -290,39 +300,65 @@ export default function MenuManager() {
                     {formatFCFA(product.price)}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <button
-                      onClick={() => void toggleStock(product)}
-                      role="switch"
-                      aria-checked={product.inStock}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        product.inStock ? "bg-emerald-500" : "bg-red-400"
-                      }`}
-                    >
+                    {readOnly ? (
                       <span
-                        className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                          product.inStock ? "translate-x-4" : "translate-x-0.5"
+                        className="inline-flex justify-end"
+                        title={product.inStock ? "Disponible" : "Indisponible"}
+                        aria-label={
+                          product.inStock ? "Disponible" : "Indisponible"
+                        }
+                      >
+                        {product.inStock ? (
+                          <CheckCircle2
+                            size={18}
+                            className="text-emerald-600"
+                            aria-hidden
+                          />
+                        ) : (
+                          <XCircle
+                            size={18}
+                            className="text-red-500"
+                            aria-hidden
+                          />
+                        )}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => void toggleStock(product)}
+                        role="switch"
+                        aria-checked={product.inStock}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                          product.inStock ? "bg-emerald-500" : "bg-red-400"
                         }`}
-                      />
-                    </button>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex justify-end gap-1">
-                      <button
-                        onClick={() => openEdit(product)}
-                        className="rounded-full p-1.5 text-ink-soft hover:bg-brand-50 hover:text-brand-600"
-                        aria-label={`Modifier ${product.name}`}
                       >
-                        <Pencil size={14} />
+                        <span
+                          className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                            product.inStock ? "translate-x-4" : "translate-x-0.5"
+                          }`}
+                        />
                       </button>
-                      <button
-                        onClick={() => void removeProduct(product)}
-                        className="rounded-full p-1.5 text-ink-soft hover:bg-red-50 hover:text-red-600"
-                        aria-label={`Supprimer ${product.name}`}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+                    )}
                   </td>
+                  {!readOnly && (
+                    <td className="px-3 py-2">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => openEdit(product)}
+                          className="rounded-full p-1.5 text-ink-soft hover:bg-brand-50 hover:text-brand-600"
+                          aria-label={`Modifier ${product.name}`}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => void removeProduct(product)}
+                          className="rounded-full p-1.5 text-ink-soft hover:bg-red-50 hover:text-red-600"
+                          aria-label={`Supprimer ${product.name}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -346,7 +382,7 @@ export default function MenuManager() {
         )}
       </div>
 
-      {formOpen && (
+      {!readOnly && formOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
           <button
             className="absolute inset-0 bg-ink/40"

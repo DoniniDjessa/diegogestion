@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { NavRail } from "@/components/NavRail";
 import { AuthGate } from "@/components/AuthGate";
 
-const FULLSCREEN_ROUTES = ["/affichage", "/connexion"];
+const FULLSCREEN_ROUTES = ["/affichage", "/connexion", "/recap"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

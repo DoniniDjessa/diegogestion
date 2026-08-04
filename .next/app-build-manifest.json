@@ -1,35 +1,15 @@
 {
   "pages": {
-    "/stock/page": [
+    "/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/stock/page.js"
+      "static/chunks/app/page.js"
     ],
     "/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
-    ],
-    "/salle/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/salle/page.js"
-    ],
-    "/commandes/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/commandes/page.js"
-    ],
-    "/livraisons/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/livraisons/page.js"
-    ],
-    "/caisse/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/caisse/page.js"
     ],
     "/connexion/page": [
       "static/chunks/webpack.js",
@@ -51,10 +31,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/parametres/layout.js"
     ],
-    "/parametres/page": [
+    "/recap/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/parametres/page.js"
+      "static/chunks/app/recap/page.js"
+    ],
+    "/recap/layout": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/recap/layout.js"
     ]
   }
 }

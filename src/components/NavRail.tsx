@@ -114,18 +114,12 @@ export function NavRail() {
 
   if (
     pathname === "/affichage" ||
-<<<<<<< HEAD
+    pathname === "/clavier" ||
     pathname === "/connexion" ||
     pathname.startsWith("/recap")
   ) {
     return null;
   }
-=======
-    pathname === "/clavier" ||
-    pathname === "/connexion"
-  )
-    return null;
->>>>>>> 1a8c4e257b99c8ff0bf82ebefde37b085416e69b
 
   const visibleItems = ITEMS.filter(
     (item) =>

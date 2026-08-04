@@ -6,11 +6,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { PwaRegister } from "@/components/PwaRegister";
 import { usePosKeyboardDomBridge } from "@/lib/pos-keyboard";
 
-<<<<<<< HEAD
-const FULLSCREEN_ROUTES = ["/affichage", "/connexion", "/recap"];
-=======
-const FULLSCREEN_ROUTES = ["/affichage", "/clavier", "/connexion"];
->>>>>>> 1a8c4e257b99c8ff0bf82ebefde37b085416e69b
+const FULLSCREEN_ROUTES = ["/affichage", "/clavier", "/connexion", "/recap"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

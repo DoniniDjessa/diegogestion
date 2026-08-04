@@ -20,6 +20,7 @@ import {
   setDrinkStockQty,
   subscribeToRestaurantChanges,
 } from "@/lib/supabase/repository";
+import { usePosKeyboardReceiver } from "@/lib/pos-keyboard";
 
 const STOCK_PAGE_SIZE = 14;
 
@@ -34,6 +35,12 @@ export default function StockPage() {
   const [workingId, setWorkingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draftQty, setDraftQty] = useState<Record<string, string>>({});
+
+  usePosKeyboardReceiver({
+    route: "stock",
+    onQuery: setQuery,
+    getQuery: () => query,
+  });
 
   const canEdit = isAdminRole(role);
 

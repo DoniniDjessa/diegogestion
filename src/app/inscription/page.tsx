@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { LoaderCircle, ShieldCheck, UserPlus, Users, X } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle, ShieldCheck, UserPlus, Users, X } from "lucide-react";
 import { ListPagination } from "@/components/ListPagination";
 import { getSupabase } from "@/lib/supabase";
 import {
@@ -34,6 +34,8 @@ export default function InscriptionPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [role, setRole] = useState<UserRole>("utilisateur");
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -279,29 +281,57 @@ export default function InscriptionPage() {
             <span className="mb-1 block text-xs font-semibold">
               Mot de passe
             </span>
-            <input
-              required
-              minLength={8}
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full border border-line px-3 py-2.5 text-sm outline-none focus:border-brand-400"
-            />
+            <div className="relative">
+              <input
+                required
+                minLength={8}
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="w-full border border-line px-3 py-2.5 pr-11 text-sm outline-none focus:border-brand-400"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={
+                  showPassword
+                    ? "Masquer le mot de passe"
+                    : "Afficher le mot de passe"
+                }
+                className="absolute inset-y-0 right-0 flex min-w-11 items-center justify-center px-3 text-ink-soft touch-manipulation"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </label>
           <label className="block">
             <span className="mb-1 block text-xs font-semibold">
               Confirmer le mot de passe
             </span>
-            <input
-              required
-              minLength={8}
-              type="password"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              className="w-full border border-line px-3 py-2.5 text-sm outline-none focus:border-brand-400"
-            />
+            <div className="relative">
+              <input
+                required
+                minLength={8}
+                type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className="w-full border border-line px-3 py-2.5 pr-11 text-sm outline-none focus:border-brand-400"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                aria-label={
+                  showConfirmPassword
+                    ? "Masquer le mot de passe"
+                    : "Afficher le mot de passe"
+                }
+                className="absolute inset-y-0 right-0 flex min-w-11 items-center justify-center px-3 text-ink-soft touch-manipulation"
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </label>
               <button
                 disabled={loading}

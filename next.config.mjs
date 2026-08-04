@@ -22,6 +22,14 @@ const nextConfig = {
         ]
       : [],
   },
+  // HTTP-level redirects avoid next/navigation redirect() inside the
+  // client AppShell, which crashes the App Router ("Rendered more hooks…").
+  async redirects() {
+    return [
+      { source: "/", destination: "/caisse", permanent: false },
+      { source: "/menu", destination: "/parametres/menu", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

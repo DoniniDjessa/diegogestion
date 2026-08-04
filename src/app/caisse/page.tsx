@@ -7,6 +7,7 @@ import {
   Coffee,
   CookingPot,
   CupSoda,
+  Grape,
   LayoutGrid,
   Martini,
   Salad,
@@ -28,8 +29,10 @@ import {
   subscribeToRestaurantChanges,
 } from "@/lib/supabase/repository";
 import { useCustomerDisplayBroadcaster } from "@/lib/customer-display";
+import { usePosKeyboardReceiver } from "@/lib/pos-keyboard";
 import { TicketPanel } from "@/components/TicketPanel";
 import { FoodImage } from "@/components/FoodImage";
+import { PwaInstallButton } from "@/components/PwaInstallButton";
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   all: LayoutGrid,
@@ -39,6 +42,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   accompagnements: Salad,
   cocktails: Martini,
   vins: Wine,
+  champagnes: Grape,
   "spiritueux-bieres": Beer,
   "softs-jus": CupSoda,
   "boissons-chaudes": Coffee,
@@ -50,11 +54,18 @@ export default function CaissePage() {
   const [query, setQuery] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { lines, channel, payment, restaurantTableId, amountReceived, add } =
+  const { lines, channel, payment, restaurantTableId, amountReceived, add, setAmountReceived } =
     useCart();
   const total = cartTotal(lines);
   const count = lines.reduce((n, l) => n + l.qty, 0);
   useCustomerDisplayBroadcaster(lines, channel, payment, amountReceived);
+  usePosKeyboardReceiver({
+    route: "caisse",
+    onQuery: setQuery,
+    onAmount: setAmountReceived,
+    getQuery: () => query,
+    getAmount: () => amountReceived,
+  });
 
   useEffect(() => {
     if (restaurantTableId) setDrawerOpen(true);
@@ -147,6 +158,25 @@ export default function CaissePage() {
               placeholder="Rechercher un produit…"
               className="w-full rounded-full border border-line bg-white py-2.5 pl-10 pr-4 text-xs shadow-card outline-none focus:border-brand-400"
             />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="/clavier"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-line bg-white px-3 py-1.5 text-[11px] font-semibold text-ink-soft hover:border-brand-400 hover:text-brand-700"
+            >
+              Clavier
+            </a>
+            <a
+              href="/affichage"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-line bg-white px-3 py-1.5 text-[11px] font-semibold text-ink-soft hover:border-brand-400 hover:text-brand-700"
+            >
+              Affichage
+            </a>
+            <PwaInstallButton label="Installer" />
           </div>
         </header>
 

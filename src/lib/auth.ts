@@ -67,7 +67,7 @@ export function isAdminRole(role: UserRole | null): boolean {
 }
 
 export function homeForRole(role: UserRole | null): string {
-  if (role === "superAdmin" || role === "admin") return "/menu";
+  if (role === "superAdmin" || role === "admin") return "/parametres/menu";
   if (role === "caissier") return "/caisse";
   return "/connexion";
 }

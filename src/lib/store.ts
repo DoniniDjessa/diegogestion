@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { OrderChannel, PaymentMethod, Product } from "./types";
+import type { Order, OrderChannel, PaymentMethod, Product } from "./types";
 
 export interface CartLine {
   product: Product;
@@ -15,6 +15,9 @@ interface CartState {
   restaurantTableId: string | null;
   /** Montant remis par le client (FCFA). */
   amountReceived: number;
+  /** Vente en attente en cours de modification (null = nouvelle commande). */
+  editingOrderId: string | null;
+  editingOrderNumber: number | null;
   add: (product: Product) => void;
   remove: (productId: string) => void;
   setQty: (productId: string, qty: number) => void;
@@ -22,6 +25,7 @@ interface CartState {
   setPayment: (payment: PaymentMethod) => void;
   setRestaurantTableId: (tableId: string | null) => void;
   setAmountReceived: (amount: number) => void;
+  loadForEdit: (order: Order) => void;
   clear: () => void;
 }
 
@@ -31,6 +35,8 @@ export const useCart = create<CartState>((set) => ({
   payment: "especes",
   restaurantTableId: null,
   amountReceived: 0,
+  editingOrderId: null,
+  editingOrderNumber: null,
   add: (product) =>
     set((s) => {
       const existing = s.lines.find((l) => l.product.id === product.id);
@@ -68,7 +74,27 @@ export const useCart = create<CartState>((set) => ({
     ),
   setAmountReceived: (amountReceived) =>
     set({ amountReceived: Math.max(0, Math.floor(amountReceived) || 0) }),
-  clear: () => set({ lines: [], restaurantTableId: null, amountReceived: 0 }),
+  loadForEdit: (order) =>
+    set({
+      editingOrderId: order.id,
+      editingOrderNumber: order.number,
+      lines: order.lines.map((line) => ({
+        product: line.product,
+        qty: line.qty,
+      })),
+      channel: order.channel,
+      payment: order.paymentMethod ?? "especes",
+      restaurantTableId: order.restaurantTableId ?? null,
+      amountReceived: 0,
+    }),
+  clear: () =>
+    set({
+      lines: [],
+      restaurantTableId: null,
+      amountReceived: 0,
+      editingOrderId: null,
+      editingOrderNumber: null,
+    }),
 }));
 
 export function cartTotal(lines: CartLine[]): number {

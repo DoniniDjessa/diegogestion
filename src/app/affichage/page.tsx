@@ -5,6 +5,7 @@ import { formatFCFA } from "@/lib/data";
 import { cartChange, cartTotal } from "@/lib/store";
 import { useCustomerDisplayReceiver } from "@/lib/customer-display";
 import { FoodImage } from "@/components/FoodImage";
+import { PwaInstallButton } from "@/components/PwaInstallButton";
 
 export default function AffichagePage() {
   const { snapshot } = useCustomerDisplayReceiver();
@@ -23,7 +24,7 @@ export default function AffichagePage() {
         }}
       />
 
-      <header className="relative z-10 flex items-center gap-2.5 px-5 py-3.5 sm:px-7">
+      <header className="relative z-10 flex items-center justify-between gap-2.5 px-5 py-3.5 sm:px-7">
         <Image
           src="/diego.png"
           alt="Chez Diego"
@@ -32,6 +33,7 @@ export default function AffichagePage() {
           priority
           className="h-8 w-auto object-contain sm:h-9"
         />
+        <PwaInstallButton label="Installer" />
       </header>
 
       <main className="relative z-10 grid min-h-0 flex-1 grid-cols-[minmax(0,1.45fr)_minmax(15rem,0.85fr)] gap-4 px-5 pb-5 sm:gap-5 sm:px-7 sm:pb-7">

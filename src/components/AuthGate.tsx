@@ -11,7 +11,11 @@ import {
   type UserRole,
 } from "@/lib/auth";
 
+<<<<<<< HEAD
 const PUBLIC_ROUTES = ["/connexion", "/affichage", "/recap"];
+=======
+const PUBLIC_ROUTES = ["/connexion", "/affichage", "/clavier"];
+>>>>>>> 1a8c4e257b99c8ff0bf82ebefde37b085416e69b
 
 function canOpenPath(role: UserRole | null, pathname: string): boolean {
   if (pathname === "/recap" || pathname.startsWith("/recap/")) {

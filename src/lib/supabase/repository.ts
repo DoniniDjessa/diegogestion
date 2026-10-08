@@ -445,6 +445,16 @@ export async function deleteRestaurantTable(tableId: string): Promise<void> {
   if (!data) throw new Error("Table deletion was not authorized.");
 }
 
+const ORDER_LOOKUP_BATCH_SIZE = 100;
+
+function splitIntoBatches<T>(values: T[], batchSize: number): T[][] {
+  const batches: T[][] = [];
+  for (let index = 0; index < values.length; index += batchSize) {
+    batches.push(values.slice(index, index + batchSize));
+  }
+  return batches;
+}
+
 async function fetchOrdersByScope(includeClosed: boolean): Promise<Order[]> {
   const supabase = await requireAuthenticatedSession();
   let query = supabase
@@ -465,32 +475,40 @@ async function fetchOrdersByScope(includeClosed: boolean): Promise<Order[]> {
   const rows = (orderData ?? []) as OrderRow[];
   if (rows.length === 0) return [];
 
-  const tableIds = rows
-    .map((row) => row.restaurant_table_id)
-    .filter((id): id is string => Boolean(id));
+  const orderIds = rows.map((row) => row.id);
+  const tableIds = Array.from(
+    new Set(
+      rows
+        .map((row) => row.restaurant_table_id)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
 
-  const [itemsResult, tablesResult] = await Promise.all([
-    supabase
-      .from(DIEGO_TABLES.orderItems)
-      .select(
-        "id,order_id,product_id,product_name,unit_price,quantity,note"
+  const [itemsResults, tablesResults] = await Promise.all([
+    Promise.all(
+      splitIntoBatches(orderIds, ORDER_LOOKUP_BATCH_SIZE).map((batch) =>
+        supabase
+          .from(DIEGO_TABLES.orderItems)
+          .select(
+            "id,order_id,product_id,product_name,unit_price,quantity,note"
+          )
+          .in("order_id", batch)
       )
-      .in(
-        "order_id",
-        rows.map((row) => row.id)
-      ),
-    tableIds.length > 0
-      ? supabase
+    ),
+    Promise.all(
+      splitIntoBatches(tableIds, ORDER_LOOKUP_BATCH_SIZE).map((batch) =>
+        supabase
           .from(DIEGO_TABLES.restaurantTables)
           .select("id,label")
-          .in("id", tableIds)
-      : Promise.resolve({ data: [], error: null }),
+          .in("id", batch)
+      )
+    ),
   ]);
 
-  if (itemsResult.error) throw itemsResult.error;
-  if (tablesResult.error) throw tablesResult.error;
-
-  const items = (itemsResult.data ?? []) as OrderItemRow[];
+  const items = itemsResults.flatMap((result) => {
+    if (result.error) throw result.error;
+    return (result.data ?? []) as OrderItemRow[];
+  });
   const productIds = Array.from(
     new Set(
       items
@@ -500,24 +518,32 @@ async function fetchOrdersByScope(includeClosed: boolean): Promise<Order[]> {
   );
   const productCategories = new Map<string, string>();
   if (productIds.length > 0) {
-    const { data: productsData, error: productsError } = await supabase
-      .from(DIEGO_TABLES.products)
-      .select("id,category")
-      .in("id", productIds);
-    if (productsError) throw productsError;
-    for (const product of productsData ?? []) {
-      productCategories.set(
-        String((product as { id: string }).id),
-        String((product as { category: string }).category)
-      );
+    const productsResults = await Promise.all(
+      splitIntoBatches(productIds, ORDER_LOOKUP_BATCH_SIZE).map((batch) =>
+        supabase
+          .from(DIEGO_TABLES.products)
+          .select("id,category")
+          .in("id", batch)
+      )
+    );
+    for (const result of productsResults) {
+      if (result.error) throw result.error;
+      for (const product of result.data ?? []) {
+        productCategories.set(
+          String((product as { id: string }).id),
+          String((product as { category: string }).category)
+        );
+      }
     }
   }
 
   const tableLabels = new Map(
-    ((tablesResult.data ?? []) as { id: string; label: string }[]).map((row) => [
-      row.id,
-      row.label,
-    ])
+    tablesResults
+      .flatMap((result) => {
+        if (result.error) throw result.error;
+        return (result.data ?? []) as { id: string; label: string }[];
+      })
+      .map((row) => [row.id, row.label])
   );
 
   return rows.map((row) => ({

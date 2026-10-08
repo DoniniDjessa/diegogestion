@@ -85,8 +85,16 @@ export function RecapCommandes() {
     try {
       setOrders(await fetchAllOrders());
       setError(null);
-    } catch {
-      setError("Impossible de charger les commandes.");
+    } catch (cause) {
+      const message =
+        cause instanceof Error
+          ? cause.message
+          : "Impossible de charger les commandes.";
+      setError(
+        message === "Staff authentication required."
+          ? "Session d’équipe absente ou expirée. Connectez-vous à nouveau pour consulter les commandes."
+          : message
+      );
     } finally {
       setLoading(false);
     }

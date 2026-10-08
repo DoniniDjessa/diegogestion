@@ -43,6 +43,7 @@ function parseDeliveryNote(note: string | undefined): {
 }
 
 const CHANNELS: OrderChannel[] = ["table", "livraison"];
+const HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const PAYMENTS: { id: PaymentMethod; label: string; icon: typeof Banknote }[] = [
   { id: "especes", label: "Espèces", icon: Banknote },
@@ -126,9 +127,13 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
     (order) =>
       order.paymentStatus === "en_attente" && order.status !== "annule"
   );
+  const historyCutoff = Date.now() - HISTORY_WINDOW_MS;
   const paidOrders = orders
     .filter(
-      (order) => order.paymentStatus === "paye" && order.status !== "annule"
+      (order) =>
+        order.paymentStatus === "paye" &&
+        order.status !== "annule" &&
+        new Date(order.createdAt).getTime() >= historyCutoff
     )
     .slice(0, 40);
 
@@ -770,7 +775,10 @@ export function TicketPanel({ onCheckout }: { onCheckout?: () => void }) {
                         </p>
                         <p className="truncate text-[9px] text-ink-faint">
                           {order.table ?? CHANNEL_META[order.channel]?.label} ·{" "}
-                          {new Date(order.createdAt).toLocaleTimeString("fr-FR", {
+                          {new Date(order.createdAt).toLocaleString("fr-FR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
